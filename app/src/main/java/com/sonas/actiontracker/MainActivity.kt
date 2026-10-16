@@ -27,18 +27,21 @@ import androidx.work.WorkManager
 import com.google.android.gms.auth.api.identity.Identity
 import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.Notify
+import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SyncWorker
 import com.sonas.actiontracker.ui.AppScreen
 import com.sonas.actiontracker.ui.AppTheme
 import com.sonas.actiontracker.ui.LockScreen
 import com.sonas.actiontracker.ui.MainVM
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 import java.util.concurrent.TimeUnit
 
 class MainActivity : FragmentActivity() {
     private val vm: MainVM by viewModels()
     private var unlocked by mutableStateOf(false)
     private var dynamicColor by mutableStateOf(true)
+    private var reminders by mutableStateOf(Reminders.Settings(true, LocalTime.of(8, 0)))
     private var lastStop = 0L
 
     private val authLauncher =
@@ -60,6 +63,8 @@ class MainActivity : FragmentActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         Notify.ensureChannel(this)
         scheduleBackgroundSync()
+        reminders = Reminders.settings(this)
+        Reminders.schedule(this)
         setContent {
             AppTheme(dynamicColor = dynamicColor) {
                 if (unlocked) {
@@ -70,6 +75,11 @@ class MainActivity : FragmentActivity() {
                         onDynamicColorChange = {
                             dynamicColor = it
                             prefs.edit().putBoolean("dynamic_color", it).apply()
+                        },
+                        reminders = reminders,
+                        onRemindersChange = {
+                            reminders = it
+                            Reminders.save(this, it)
                         }
                     )
                 } else {

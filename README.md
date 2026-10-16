@@ -16,8 +16,9 @@ encrypted on the phone.
 - **Group by** date, person (Me, Nathiya, Vibu, Dharshu, or anyone), or context (Work, Family, Kids/School).
 - **No duplicates**: every Gmail message ID / calendar event ID is recorded the first time it is seen and never evaluated again, even if you dismiss the suggestion.
 - **Background sync** every ~2 hours with a notification when new suggestions arrive.
+- **Daily due-date reminder** (default 8:00 AM, change it or turn it off from the ⋮ menu): one notification listing open actions due today or overdue. The lock screen shows only the count.
 
-Planned for v2: home-screen widget, due-date reminders, Google Drive encrypted backup, on-device Gemini Nano for ambiguous emails (v1 uses rules only).
+Planned for v2: home-screen widget, Google Drive encrypted backup, on-device Gemini Nano for ambiguous emails (v1 uses rules only).
 
 ## One-time Google setup (required for Gmail + Calendar)
 
