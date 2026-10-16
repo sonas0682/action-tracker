@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher icon palette, matching the Indigo + Teal brand colours in ui/Theme.kt -->
+    <color name="ic_launcher_indigo">#FF4F5BD5</color>
+    <color name="ic_launcher_indigo_dark">#FF2F3799</color>
+    <color name="ic_launcher_teal">#FF00A693</color>
+</resources>
