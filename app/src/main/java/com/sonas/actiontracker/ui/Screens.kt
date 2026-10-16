@@ -54,6 +54,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
@@ -87,10 +88,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -117,7 +120,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.sync.Reminders
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 enum class Group(val label: String) { DATE("Date"), PERSON("Person"), CONTEXT("Context") }
@@ -125,6 +130,7 @@ enum class Group(val label: String) { DATE("Date"), PERSON("Person"), CONTEXT("C
 private val PEOPLE = listOf("Me", "Nathiya", "Vibu", "Dharshu")
 private val CONTEXTS = listOf("Work", "Family", "Kids/School")
 private const val DAY_MS = 86_400_000L
+private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
 
 private fun today(): Long = LocalDate.now().toEpochDay()
 
@@ -218,7 +224,9 @@ fun AppScreen(
     vm: MainVM,
     onSync: () -> Unit,
     dynamicColor: Boolean,
-    onDynamicColorChange: (Boolean) -> Unit
+    onDynamicColorChange: (Boolean) -> Unit,
+    reminders: Reminders.Settings,
+    onRemindersChange: (Reminders.Settings) -> Unit
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
@@ -226,6 +234,7 @@ fun AppScreen(
     var group by remember { mutableStateOf(Group.DATE) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var menu by remember { mutableStateOf(false) }
+    var pickingTime by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     vm.message?.let { lastMessage = it }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -245,6 +254,16 @@ fun AppScreen(
                                 text = { Text("Match wallpaper colors") },
                                 trailingIcon = { Switch(checked = dynamicColor, onCheckedChange = null) },
                                 onClick = { onDynamicColorChange(!dynamicColor) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Daily due-date reminder") },
+                                trailingIcon = { Switch(checked = reminders.enabled, onCheckedChange = null) },
+                                onClick = { onRemindersChange(reminders.copy(enabled = !reminders.enabled)) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Reminder time: ${reminders.time.format(TIME_FORMAT)}") },
+                                enabled = reminders.enabled,
+                                onClick = { menu = false; pickingTime = true }
                             )
                         }
                     }
@@ -304,6 +323,29 @@ fun AppScreen(
     editing?.let { item ->
         EditSheet(item, onDismiss = { editing = null }, onSave = { vm.save(it); editing = null })
     }
+
+    if (pickingTime) {
+        ReminderTimeDialog(
+            initial = reminders.time,
+            onDismiss = { pickingTime = false },
+            onConfirm = {
+                onRemindersChange(reminders.copy(time = it))
+                pickingTime = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ReminderTimeDialog(initial: LocalTime, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
+    val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = false)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remind me about due actions at") },
+        text = { TimePicker(state = state) },
+        confirmButton = { TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable

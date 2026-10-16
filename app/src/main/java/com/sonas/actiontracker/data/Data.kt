@@ -68,6 +68,10 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE status IN ('OPEN', 'DONE') ORDER BY dueDate, createdAt")
     fun actions(): Flow<List<Item>>
 
+    /** Open actions due on or before [epochDay] (today plus anything overdue), oldest first. */
+    @Query("SELECT * FROM items WHERE status = 'OPEN' AND dueDate <= :epochDay ORDER BY dueDate, createdAt")
+    suspend fun openDueBy(epochDay: Long): List<Item>
+
     @Insert
     suspend fun insert(item: Item): Long
 
