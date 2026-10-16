@@ -70,6 +70,9 @@ dependencies {
     implementation("net.zetetic:sqlcipher-android:4.9.0")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
+    // Home-screen widget
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+
     // Background sync
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 

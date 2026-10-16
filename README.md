@@ -18,7 +18,9 @@ encrypted on the phone.
 - **Background sync** every ~2 hours with a notification when new suggestions arrive.
 - **Daily due-date reminder** (default 8:00 AM, change it or turn it off from the ⋮ menu): one notification listing open actions due today or overdue. The lock screen shows only the count.
 
-Planned for v2: home-screen widget, Google Drive encrypted backup, on-device Gemini Nano for ambiguous emails (v1 uses rules only).
+- **Home-screen widget** ("Due today"): open actions due today or overdue. Tick one to mark it done, tap anything else to open the app. Long-press the home screen → Widgets → Action Tracker to add it.
+
+Planned for v2: Google Drive encrypted backup, on-device Gemini Nano for ambiguous emails (v1 uses rules only).
 
 ## One-time Google setup (required for Gmail + Calendar)
 
