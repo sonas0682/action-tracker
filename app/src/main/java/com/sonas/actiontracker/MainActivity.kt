@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -37,6 +38,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : FragmentActivity() {
     private val vm: MainVM by viewModels()
     private var unlocked by mutableStateOf(false)
+    private var dynamicColor by mutableStateOf(true)
     private var lastStop = 0L
 
     private val authLauncher =
@@ -50,14 +52,29 @@ class MainActivity : FragmentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        val prefs = getSharedPreferences("ui", MODE_PRIVATE)
+        dynamicColor = prefs.getBoolean("dynamic_color", true)
         // Hide contents in the recent-apps switcher and block screenshots.
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         Notify.ensureChannel(this)
         scheduleBackgroundSync()
         setContent {
-            AppTheme {
-                if (unlocked) AppScreen(vm, onSync = ::startSync) else LockScreen(onUnlock = ::promptUnlock)
+            AppTheme(dynamicColor = dynamicColor) {
+                if (unlocked) {
+                    AppScreen(
+                        vm,
+                        onSync = ::startSync,
+                        dynamicColor = dynamicColor,
+                        onDynamicColorChange = {
+                            dynamicColor = it
+                            prefs.edit().putBoolean("dynamic_color", it).apply()
+                        }
+                    )
+                } else {
+                    LockScreen(onUnlock = ::promptUnlock)
+                }
             }
         }
     }
