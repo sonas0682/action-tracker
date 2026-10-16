@@ -15,6 +15,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.security.KeyStore
@@ -41,7 +43,12 @@ data class Item(
     val status: String,
     /** GMAIL, CALENDAR or CUSTOM. */
     val source: String,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /**
+     * Full email text waiting for an on-device Gemini Nano title pass. Cleared once
+     * the pass has run, so each suggestion is summarized at most once.
+     */
+    val body: String = ""
 ) {
     companion object {
         fun blank() = Item(
@@ -75,6 +82,9 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE status = 'OPEN' AND dueDate <= :epochDay ORDER BY dueDate, createdAt")
     fun openDueByFlow(epochDay: Long): Flow<List<Item>>
 
+    @Query("SELECT * FROM items WHERE status = 'SUGGESTED' AND body != ''")
+    suspend fun awaitingSmartTitle(): List<Item>
+
     @Query("UPDATE items SET status = 'DONE' WHERE id = :id")
     suspend fun markDone(id: Long)
 
@@ -94,7 +104,7 @@ interface ItemDao {
     suspend fun markProcessed(p: Processed)
 }
 
-@Database(entities = [Item::class, Processed::class], version = 1, exportSchema = false)
+@Database(entities = [Item::class, Processed::class], version = 2, exportSchema = false)
 abstract class Db : RoomDatabase() {
     abstract fun dao(): ItemDao
 
@@ -111,7 +121,14 @@ abstract class Db : RoomDatabase() {
             val factory = SupportOpenHelperFactory(DbKey.passphrase(context))
             return Room.databaseBuilder(context, Db::class.java, "tracker.db")
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
                 .build()
+        }
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN body TEXT NOT NULL DEFAULT ''")
+            }
         }
     }
 }

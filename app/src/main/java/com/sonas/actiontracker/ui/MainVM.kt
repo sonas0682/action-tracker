@@ -10,6 +10,7 @@ import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
 import com.sonas.actiontracker.widget.DueWidget
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,6 +49,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         runCatching { DueWidget.refresh(getApplication()) }
     }
 
+    /** Runs the on-device Gemini Nano title pass over new Gmail suggestions. Needs the app in the foreground. */
+    fun smartTitles() = viewModelScope.launch { SmartTitles.run(getApplication()) }
+
     fun sync(token: String) {
         if (syncing) return
         viewModelScope.launch {
@@ -59,6 +63,7 @@ class MainVM(app: Application) : AndroidViewModel(app) {
                 "Sync failed: ${e.message}"
             }
             syncing = false
+            SmartTitles.run(getApplication())
         }
     }
 }

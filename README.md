@@ -20,7 +20,9 @@ encrypted on the phone.
 
 - **Home-screen widget** ("Due today"): open actions due today or overdue. Tick one to mark it done, tap anything else to open the app. Long-press the home screen → Widgets → Action Tracker to add it.
 
-Planned for v2: Google Drive encrypted backup, on-device Gemini Nano for ambiguous emails (v1 uses rules only).
+- **Smart titles (Gemini Nano, on-device)**: when you open the app, Gmail suggestions are rewritten into a clean one-line title by Gemini Nano's summarizer. The rules still decide what is an action; nothing leaves the phone. The original subject moves to the notes. Needs a Nano-capable phone (the S25 Ultra is supported) and emails of at least ~400 characters; otherwise the rule-based title stays. Google's general Prompt API, which could extract actions directly, doesn't support the S25 Ultra yet.
+
+Planned for v2: Google Drive encrypted backup.
 
 ## One-time Google setup (required for Gmail + Calendar)
 

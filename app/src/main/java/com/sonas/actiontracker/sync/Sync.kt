@@ -37,7 +37,9 @@ object SyncEngine {
             if (dao.seen(key) > 0) continue
             dao.markProcessed(Processed(key, System.currentTimeMillis()))
             val s = Extractor.fromMail(mail.subject, mail.from, mail.snippet, today) ?: continue
-            dao.insert(s.toItem("GMAIL"))
+            // Only flagged mail is fetched in full, for the Gemini Nano title pass that runs in the app.
+            val body = runCatching { Gmail.body(mail.id, token) }.getOrDefault("")
+            dao.insert(s.toItem("GMAIL").copy(body = body.take(SmartTitles.MAX_INPUT_CHARS)))
             added++
         }
         for (event in Calendar.upcoming(token)) {
