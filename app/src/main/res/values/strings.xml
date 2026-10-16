@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Action Tracker</string>
+    <string name="widget_description">Open actions due today or overdue</string>
 </resources>

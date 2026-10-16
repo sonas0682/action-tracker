@@ -72,6 +72,12 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE status = 'OPEN' AND dueDate <= :epochDay ORDER BY dueDate, createdAt")
     suspend fun openDueBy(epochDay: Long): List<Item>
 
+    @Query("SELECT * FROM items WHERE status = 'OPEN' AND dueDate <= :epochDay ORDER BY dueDate, createdAt")
+    fun openDueByFlow(epochDay: Long): Flow<List<Item>>
+
+    @Query("UPDATE items SET status = 'DONE' WHERE id = :id")
+    suspend fun markDone(id: Long)
+
     @Insert
     suspend fun insert(item: Item): Long
 
