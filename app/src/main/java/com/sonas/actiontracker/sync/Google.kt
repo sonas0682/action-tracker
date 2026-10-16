@@ -16,6 +16,7 @@ import java.net.URLEncoder
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.util.Base64
 
 object GoogleAuth {
     private val scopes = listOf(
@@ -73,6 +74,28 @@ object Gmail {
             Mail(id, subject, from, msg.optString("snippet"))
         }
     }
+}
+
+/** Plain text of one message (text/plain part, or tag-stripped HTML), for the on-device title pass. */
+suspend fun Gmail.body(id: String, token: String): String = withContext(Dispatchers.IO) {
+    val payload = JSONObject(httpGet("https://gmail.googleapis.com/gmail/v1/users/me/messages/$id?format=full", token))
+        .optJSONObject("payload") ?: return@withContext ""
+    val plain = findPart(payload, "text/plain")
+    val text = plain ?: findPart(payload, "text/html")
+        ?.replace(Regex("(?is)<(style|script)[^>]*>.*?</\\1>"), " ")
+        ?.replace(Regex("<[^>]+>"), " ")
+        ?.replace(Regex("&nbsp;|&#160;"), " ")
+    (text ?: "").replace(Regex("\\s+"), " ").trim()
+}
+
+private fun findPart(part: JSONObject, mime: String): String? {
+    if (part.optString("mimeType") == mime) {
+        val data = part.optJSONObject("body")?.optString("data").orEmpty()
+        if (data.isNotEmpty()) return String(Base64.getUrlDecoder().decode(data), Charsets.UTF_8)
+    }
+    val parts = part.optJSONArray("parts") ?: return null
+    for (i in 0 until parts.length()) findPart(parts.getJSONObject(i), mime)?.let { return it }
+    return null
 }
 
 object Calendar {
