@@ -226,7 +226,8 @@ fun AppScreen(
     dynamicColor: Boolean,
     onDynamicColorChange: (Boolean) -> Unit,
     reminders: Reminders.Settings,
-    onRemindersChange: (Reminders.Settings) -> Unit
+    onRemindersChange: (Reminders.Settings) -> Unit,
+    onOpenBackup: () -> Unit
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
@@ -264,6 +265,10 @@ fun AppScreen(
                                 text = { Text("Reminder time: ${reminders.time.format(TIME_FORMAT)}") },
                                 enabled = reminders.enabled,
                                 onClick = { menu = false; pickingTime = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Google Drive backup") },
+                                onClick = { menu = false; onOpenBackup() }
                             )
                         }
                     }

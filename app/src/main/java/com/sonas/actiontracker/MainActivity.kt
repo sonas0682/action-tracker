@@ -25,12 +25,14 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.gms.auth.api.identity.Identity
+import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.Notify
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SyncWorker
 import com.sonas.actiontracker.ui.AppScreen
 import com.sonas.actiontracker.ui.AppTheme
+import com.sonas.actiontracker.ui.BackupDialog
 import com.sonas.actiontracker.ui.LockScreen
 import com.sonas.actiontracker.ui.MainVM
 import kotlinx.coroutines.launch
@@ -51,6 +53,19 @@ class MainActivity : FragmentActivity() {
                 .onFailure { vm.message = "Google sign-in cancelled" }
         }
 
+    /** Drive work waiting for the user to grant Drive access. */
+    private var pendingDrive: ((String) -> Unit)? = null
+    private var showBackup by mutableStateOf(false)
+
+    private val driveAuthLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+            val action = pendingDrive
+            pendingDrive = null
+            runCatching { Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(res.data) }
+                .onSuccess { r -> r.accessToken?.let { action?.invoke(it) } }
+                .onFailure { vm.message = "Google Drive access cancelled" }
+        }
+
     private val notifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -65,6 +80,7 @@ class MainActivity : FragmentActivity() {
         scheduleBackgroundSync()
         reminders = Reminders.settings(this)
         Reminders.schedule(this)
+        Backup.schedule(this)
         setContent {
             AppTheme(dynamicColor = dynamicColor) {
                 if (unlocked) {
@@ -80,8 +96,18 @@ class MainActivity : FragmentActivity() {
                         onRemindersChange = {
                             reminders = it
                             Reminders.save(this, it)
-                        }
+                        },
+                        onOpenBackup = { showBackup = true }
                     )
+                    if (showBackup) {
+                        BackupDialog(
+                            vm,
+                            onTurnOn = { pass -> withDriveToken { vm.enableBackup(pass, it) } },
+                            onBackUpNow = { withDriveToken { vm.backUpNow(it) } },
+                            onRestore = { pass -> withDriveToken { vm.restoreBackup(pass, it) } },
+                            onDismiss = { showBackup = false }
+                        )
+                    }
                 } else {
                     LockScreen(onUnlock = ::promptUnlock)
                 }
@@ -134,6 +160,23 @@ class MainActivity : FragmentActivity() {
                     }
                 }
                 .onFailure { vm.message = "Google sign-in failed: ${it.message}" }
+        }
+    }
+
+    /** Gets a Drive access token, asking for Drive access the first time, then runs [action]. */
+    private fun withDriveToken(action: (String) -> Unit) {
+        lifecycleScope.launch {
+            runCatching { Backup.authorize(this@MainActivity) }
+                .onSuccess { r ->
+                    val pending = r.pendingIntent
+                    if (r.hasResolution() && pending != null) {
+                        pendingDrive = action
+                        driveAuthLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                    } else {
+                        r.accessToken?.let(action)
+                    }
+                }
+                .onFailure { vm.message = "Google Drive sign-in failed: ${it.message}" }
         }
     }
 

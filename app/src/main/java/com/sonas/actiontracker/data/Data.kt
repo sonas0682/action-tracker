@@ -85,6 +85,18 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE status = 'SUGGESTED' AND body != ''")
     suspend fun awaitingSmartTitle(): List<Item>
 
+    @Query("SELECT * FROM items")
+    suspend fun allItems(): List<Item>
+
+    @Query("SELECT * FROM processed")
+    suspend fun allProcessed(): List<Processed>
+
+    @Query("DELETE FROM items")
+    suspend fun deleteAllItems()
+
+    @Query("DELETE FROM processed")
+    suspend fun deleteAllProcessed()
+
     @Query("UPDATE items SET status = 'DONE' WHERE id = :id")
     suspend fun markDone(id: Long)
 

@@ -21,14 +21,13 @@ encrypted on the phone.
 - **Home-screen widget** ("Due today"): open actions due today or overdue. Tick one to mark it done, tap anything else to open the app. Long-press the home screen → Widgets → Action Tracker to add it.
 
 - **Smart titles (Gemini Nano, on-device)**: when you open the app, Gmail suggestions are rewritten into a clean one-line title by Gemini Nano's summarizer. The rules still decide what is an action; nothing leaves the phone. The original subject moves to the notes. Needs a Nano-capable phone (the S25 Ultra is supported) and emails of at least ~400 characters; otherwise the rule-based title stays. Google's general Prompt API, which could extract actions directly, doesn't support the S25 Ultra yet.
-
-Planned for v2: Google Drive encrypted backup.
+- **Encrypted Google Drive backup** (⋮ → Google Drive backup): a daily backup to the app's hidden Drive folder, encrypted on the phone with your backup passphrase (AES-256-GCM, PBKDF2 key). Restore on a new phone with the same passphrase. Google can't read it, and a forgotten passphrase can't be recovered.
 
 ## One-time Google setup (required for Gmail + Calendar)
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail API** and **Google Calendar API**.
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail API**, **Google Calendar API** and **Google Drive API** (Drive is only for the optional backup).
 2. OAuth consent screen: user type **External**, leave publishing status as **Testing**, add scopes
-   `.../auth/gmail.readonly` and `.../auth/calendar.readonly`, and add **your own Gmail address as a test user**.
+   `.../auth/gmail.readonly`, `.../auth/calendar.readonly` and `.../auth/drive.appdata`, and add **your own Gmail address as a test user**.
 3. Credentials → Create OAuth client ID → **Android**:
    - Package name: `com.sonas.actiontracker`
    - SHA-1: the fingerprint of the key that signs your APK (see below).
