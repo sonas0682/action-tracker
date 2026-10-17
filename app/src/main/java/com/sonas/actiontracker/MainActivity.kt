@@ -2,9 +2,11 @@ package com.sonas.actiontracker
 
 import android.Manifest
 import android.os.Build
+import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
@@ -42,7 +44,8 @@ import java.util.concurrent.TimeUnit
 class MainActivity : FragmentActivity() {
     private val vm: MainVM by viewModels()
     private var unlocked by mutableStateOf(false)
-    private var dynamicColor by mutableStateOf(true)
+    /** Fingerprint lock at launch. Off by default; the database key never depends on it. */
+    private var lockEnabled by mutableStateOf(false)
     private var reminders by mutableStateOf(Reminders.Settings(true, LocalTime.of(8, 0)))
     private var lastStop = 0L
 
@@ -70,10 +73,18 @@ class MainActivity : FragmentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // The UI is always dark, so keep light system-bar icons whatever the system theme.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+        )
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("ui", MODE_PRIVATE)
-        dynamicColor = prefs.getBoolean("dynamic_color", true)
+        lockEnabled = prefs.getBoolean("lock_enabled", false)
+        if (!lockEnabled) {
+            unlocked = true
+            askNotificationPermission()
+        }
         // Hide contents in the recent-apps switcher and block screenshots.
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         Notify.ensureChannel(this)
@@ -82,15 +93,15 @@ class MainActivity : FragmentActivity() {
         Reminders.schedule(this)
         Backup.schedule(this)
         setContent {
-            AppTheme(dynamicColor = dynamicColor) {
+            AppTheme {
                 if (unlocked) {
                     AppScreen(
                         vm,
                         onSync = ::startSync,
-                        dynamicColor = dynamicColor,
-                        onDynamicColorChange = {
-                            dynamicColor = it
-                            prefs.edit().putBoolean("dynamic_color", it).apply()
+                        lockEnabled = lockEnabled,
+                        onLockChange = {
+                            lockEnabled = it
+                            prefs.edit().putBoolean("lock_enabled", it).apply()
                         },
                         reminders = reminders,
                         onRemindersChange = {
@@ -117,6 +128,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!lockEnabled) {
+            vm.smartTitles()
+            return
+        }
         // Re-lock if the app was in the background for more than 30 seconds.
         if (!unlocked || SystemClock.elapsedRealtime() - lastStop > 30_000) {
             unlocked = false
@@ -134,9 +149,7 @@ class MainActivity : FragmentActivity() {
             this, ContextCompat.getMainExecutor(this),
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    unlocked = true
-                    vm.smartTitles()
-                    if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    onUnlocked()
                 }
             }
         )
@@ -146,6 +159,16 @@ class MainActivity : FragmentActivity() {
                 .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
                 .build()
         )
+    }
+
+    private fun onUnlocked() {
+        unlocked = true
+        vm.smartTitles()
+        askNotificationPermission()
+    }
+
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun startSync() {

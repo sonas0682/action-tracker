@@ -36,6 +36,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     /** Confirms a suggestion: it becomes a regular open action. */
     fun confirm(item: Item) = write { dao.update(item.copy(status = STATUS_OPEN)) }
 
+    /** Confirms every suggestion currently on screen in one go. */
+    fun confirmAll(items: List<Item>) = write { items.forEach { dao.update(it.copy(status = STATUS_OPEN)) } }
+
     /** Dismisses a suggestion. The source stays in `processed`, so it never comes back. */
     fun dismiss(item: Item) = viewModelScope.launch { dao.delete(item) }
 

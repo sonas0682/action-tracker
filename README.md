@@ -1,6 +1,6 @@
 # Action Tracker
 
-A personal, fingerprint-locked action-item tracker for Android (built for a Samsung S25 Ultra).
+A personal action-item tracker for Android (built for a Samsung S25 Ultra).
 
 It scans your Gmail inbox and Google Calendar for things that need doing, **proposes** them in a
 *Suggested* inbox, and only adds them to your list after you confirm. Everything is stored
@@ -8,10 +8,10 @@ encrypted on the phone.
 
 ## v1 features
 
-- **Fingerprint lock** (BiometricPrompt; device PIN as fallback). Re-locks after 30 s in the background; screenshots and the recents preview are blocked.
+- **Optional fingerprint lock** (off by default; turn it on from the ⋮ menu). BiometricPrompt with device PIN fallback, re-locks after 30 s in the background. Screenshots and the recents preview are always blocked.
 - **Encrypted on-device storage**: Room + SQLCipher (AES-256). The passphrase is wrapped by a hardware-backed Android Keystore key. Backups are disabled.
 - **Sources**: Gmail (inbox, excluding promotions/social, last 2 days), Google Calendar (next 7 days), and custom items (+ button).
-- **Confirm before adding**: Gmail/Calendar items land in *Suggested*; tap Add, Edit or Dismiss.
+- **Confirm before adding**: Gmail/Calendar items land in *Suggested* as compact rows; tap ✓ to add, ✕ to dismiss, the row to expand and edit, or "Add all".
 - **Default due date is tomorrow** when the source has no date. A date in the text (e.g. "by Friday", "Oct 20", "2026-10-20", "tomorrow") overrides it. Editable any time.
 - **Group by** date, person (Me, Nathiya, Vibu, Dharshu, or anyone), or context (Work, Family, Kids/School).
 - **No duplicates**: every Gmail message ID / calendar event ID is recorded the first time it is seen and never evaluated again, even if you dismiss the suggestion.
@@ -54,3 +54,9 @@ Without these secrets the workflow signs with a throwaway debug key, and the SHA
 ## Stack
 
 Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometric · WorkManager · Google Identity Authorization API + Gmail/Calendar REST.
+
+## Look and feel
+
+Dark-first "Midnight" theme: near-black canvas with slowly drifting violet/magenta/cyan glows,
+a violet → magenta → amber accent gradient, frosted-glass cards, big expressive headings, a
+summary header (late / today / open / inbox), a sliding gradient tab switcher and a glowing New button.
