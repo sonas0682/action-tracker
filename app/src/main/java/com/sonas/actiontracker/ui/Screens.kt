@@ -548,15 +548,12 @@ private fun NewActionFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         label = "halo"
     )
     Box(modifier, contentAlignment = Alignment.Center) {
-        Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(PILL).background(Fresh.Teal.copy(alpha = halo * 0.35f)))
-        Row(
-            Modifier.clip(PILL).background(Fresh.accent).clickable(onClick = onClick)
-                .padding(horizontal = 22.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(CircleShape).background(Fresh.Teal.copy(alpha = halo * 0.35f)))
+        Box(
+            Modifier.size(56.dp).clip(CircleShape).background(Fresh.accent).clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("New", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Icon(Icons.Rounded.Add, contentDescription = "Add action", tint = Color.White, modifier = Modifier.size(28.dp))
         }
     }
 }
@@ -806,7 +803,7 @@ private fun ActionsList(
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Nothing yet", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "Tap New to add one, or review Suggested.",
+                        "Tap + to add one, or review Suggested.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Fresh.TextDim
                     )
