@@ -1,46 +1,56 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.sonas.actiontracker.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Create
 import androidx.compose.material.icons.rounded.DateRange
@@ -56,40 +66,21 @@ import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Badge
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -100,6 +91,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,7 +101,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -131,6 +122,8 @@ private val PEOPLE = listOf("Me", "Nathiya", "Vibu", "Dharshu")
 private val CONTEXTS = listOf("Work", "Family", "Kids/School")
 private const val DAY_MS = 86_400_000L
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
+private val PILL = RoundedCornerShape(50)
+private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
 
@@ -147,16 +140,38 @@ private fun dateLabel(epochDay: Long): String {
     }
 }
 
+/** Short due label for compact rows: "Today", "Tomorrow", "3d late", "Fri, Oct 24". */
+private fun shortDue(epochDay: Long): String {
+    val diff = epochDay - today()
+    return when {
+        diff < 0 -> "${-diff}d late"
+        diff == 0L -> "Today"
+        diff == 1L -> "Tomorrow"
+        else -> fullDate(epochDay)
+    }
+}
+
+private fun dueColor(epochDay: Long, done: Boolean = false): Color {
+    val diff = epochDay - today()
+    return when {
+        done -> Fresh.TextDim
+        diff < 0 -> Fresh.Coral
+        diff == 0L -> Fresh.Sky
+        diff == 1L -> Fresh.Amber
+        else -> Fresh.TextDim
+    }
+}
+
 private fun sourceIcon(source: String): ImageVector = when (source) {
     "GMAIL" -> Icons.Rounded.Email
     "CALENDAR" -> Icons.Rounded.DateRange
     else -> Icons.Rounded.Create
 }
 
-private fun sourceLabel(source: String): String = when (source) {
-    "GMAIL" -> "From Gmail"
-    "CALENDAR" -> "From Calendar"
-    else -> "Added by you"
+private fun sourceColor(source: String): Color = when (source) {
+    "GMAIL" -> Fresh.Teal
+    "CALENDAR" -> Fresh.Sky
+    else -> Fresh.Indigo
 }
 
 private fun contextIcon(context: String): ImageVector = when (context.lowercase()) {
@@ -166,53 +181,50 @@ private fun contextIcon(context: String): ImageVector = when (context.lowercase(
     else -> Icons.Rounded.Place
 }
 
+private fun personColor(name: String): Color = when (Math.floorMod(name.hashCode(), 4)) {
+    0 -> Fresh.Indigo
+    1 -> Fresh.Teal
+    2 -> Fresh.Sky
+    else -> Fresh.Amber
+}
+
+private fun greeting(): String = when (LocalTime.now().hour) {
+    in 5..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
+}
+
 // ---------------------------------------------------------------- Lock screen
 
 @Composable
 fun LockScreen(onUnlock: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
     val pulse = rememberInfiniteTransition(label = "pulse")
     val ring by pulse.animateFloat(
-        initialValue = 1f, targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse),
+        initialValue = 1f, targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
         label = "ring"
     )
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))
-            .systemBarsPadding()
-            .padding(horizontal = 32.dp, vertical = 24.dp)
-    ) {
-        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier.size(120.dp).scale(ring).clip(CircleShape)
-                        .background(cs.primary.copy(alpha = 0.15f))
-                )
-                Surface(shape = CircleShape, color = cs.primary, shadowElevation = 8.dp, modifier = Modifier.size(96.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Lock, contentDescription = null, tint = cs.onPrimary, modifier = Modifier.size(44.dp))
+    AuroraBackground {
+        Box(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 28.dp, vertical = 24.dp)) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(132.dp).scale(ring).clip(CircleShape).background(Fresh.Indigo.copy(alpha = 0.18f)))
+                    Box(
+                        Modifier.size(100.dp).clip(CircleShape).background(Fresh.accent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.Lock, null, tint = Color.White, modifier = Modifier.size(44.dp))
                     }
                 }
+                Spacer(Modifier.height(36.dp))
+                Text("Action\nTracker", style = MaterialTheme.typography.displayMedium, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(10.dp))
+                Text("Locked to keep your actions private.", color = Fresh.TextDim, textAlign = TextAlign.Center)
             }
-            Spacer(Modifier.height(32.dp))
-            Text("Action Tracker", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Locked to keep your actions private.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = cs.onSurfaceVariant,
-                textAlign = TextAlign.Center
+            GradientButton(
+                "Unlock", Icons.Rounded.Lock, onUnlock,
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(58.dp)
             )
-        }
-        Button(
-            onClick = onUnlock,
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(56.dp)
-        ) {
-            Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-            Text("Unlock with fingerprint", style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -223,67 +235,36 @@ fun LockScreen(onUnlock: () -> Unit) {
 fun AppScreen(
     vm: MainVM,
     onSync: () -> Unit,
-    dynamicColor: Boolean,
-    onDynamicColorChange: (Boolean) -> Unit,
+    lockEnabled: Boolean,
+    onLockChange: (Boolean) -> Unit,
     reminders: Reminders.Settings,
-    onRemindersChange: (Reminders.Settings) -> Unit
+    onRemindersChange: (Reminders.Settings) -> Unit,
+    onOpenBackup: () -> Unit
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var group by remember { mutableStateOf(Group.DATE) }
     var editing by remember { mutableStateOf<Item?>(null) }
-    var menu by remember { mutableStateOf(false) }
     var pickingTime by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     vm.message?.let { lastMessage = it }
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val cs = MaterialTheme.colorScheme
+    val open = actions.filter { it.status == STATUS_OPEN }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = { Text("Action Tracker") },
-                actions = {
-                    SyncButton(syncing = vm.syncing, onSync = onSync)
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Match wallpaper colors") },
-                                trailingIcon = { Switch(checked = dynamicColor, onCheckedChange = null) },
-                                onClick = { onDynamicColorChange(!dynamicColor) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Daily due-date reminder") },
-                                trailingIcon = { Switch(checked = reminders.enabled, onCheckedChange = null) },
-                                onClick = { onRemindersChange(reminders.copy(enabled = !reminders.enabled)) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Reminder time: ${reminders.time.format(TIME_FORMAT)}") },
-                                enabled = reminders.enabled,
-                                onClick = { menu = false; pickingTime = true }
-                            )
-                        }
-                    }
-                },
-                scrollBehavior = scroll,
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = cs.surface,
-                    scrolledContainerColor = cs.surfaceContainer
-                )
+    AuroraBackground {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Header(
+                open = open,
+                inbox = suggested.size,
+                syncing = vm.syncing,
+                onSync = onSync,
+                menu = {
+                    MoreMenu(
+                        lockEnabled, onLockChange, reminders, onRemindersChange,
+                        onPickTime = { pickingTime = true }, onOpenBackup = onOpenBackup
+                    )
+                }
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { editing = Item.blank() },
-                icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                text = { Text("New action") }
-            )
-        }
-    ) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize()) {
             AnimatedVisibility(
                 visible = vm.message != null,
                 enter = expandVertically() + fadeIn(),
@@ -291,21 +272,12 @@ fun AppScreen(
             ) {
                 MessageBanner(lastMessage, onClose = { vm.message = null })
             }
-            PrimaryTabRow(selectedTabIndex = tab, containerColor = cs.surface) {
-                Tab(
-                    selected = tab == 0, onClick = { tab = 0 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Suggested")
-                            if (suggested.isNotEmpty()) {
-                                Spacer(Modifier.width(8.dp))
-                                Badge { Text("${suggested.size}") }
-                            }
-                        }
-                    }
-                )
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Actions") })
-            }
+            TabSwitcher(
+                tab = tab,
+                labels = listOf("Suggested", "Actions"),
+                counts = listOf(suggested.size, open.size),
+                onSelect = { tab = it }
+            )
             PullToRefreshBox(
                 isRefreshing = vm.syncing,
                 onRefresh = onSync,
@@ -318,6 +290,10 @@ fun AppScreen(
                 }
             }
         }
+        NewActionFab(
+            onClick = { editing = Item.blank() },
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
+        )
     }
 
     editing?.let { item ->
@@ -337,6 +313,204 @@ fun AppScreen(
 }
 
 @Composable
+private fun Header(open: List<Item>, inbox: Int, syncing: Boolean, onSync: () -> Unit, menu: @Composable () -> Unit) {
+    val t = today()
+    val overdue = open.count { it.dueDate < t }
+    val dueToday = open.count { it.dueDate == t }
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(Fresh.accent))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE · MMM d")).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Fresh.TextDim,
+                modifier = Modifier.weight(1f)
+            )
+            SyncButton(syncing, onSync)
+            Spacer(Modifier.width(6.dp))
+            menu()
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(greeting(), style = MaterialTheme.typography.titleMedium, color = Fresh.TextDim)
+        Text(
+            when {
+                open.isEmpty() && inbox == 0 -> "All clear."
+                overdue > 0 -> "Let's catch up."
+                dueToday > 0 -> "Focus on today."
+                open.isEmpty() -> "Inbox waiting."
+                else -> "You're ahead."
+            },
+            style = MaterialTheme.typography.displaySmall.copy(brush = Fresh.accentHorizontal),
+            maxLines = 1
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("Late", overdue, if (overdue > 0) Fresh.Coral else Fresh.Text, Modifier.weight(1f))
+            StatTile("Today", dueToday, Fresh.Sky, Modifier.weight(1f))
+            StatTile("Open", open.size, Fresh.Text, Modifier.weight(1f))
+            StatTile("Inbox", inbox, Fresh.Teal, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(14.dp))
+    }
+}
+
+@Composable
+private fun StatTile(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
+    val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
+    Column(modifier.glass(RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Text(
+            "${shown.toInt()}",
+            style = MaterialTheme.typography.headlineMedium,
+            color = color
+        )
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
+    }
+}
+
+@Composable
+private fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
+    Box(
+        Modifier.size(42.dp).glass(CircleShape).clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+@Composable
+private fun SyncButton(syncing: Boolean, onSync: () -> Unit) {
+    val spin = rememberInfiniteTransition(label = "spin")
+    val angle by spin.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+        label = "angle"
+    )
+    GlassIconButton(onClick = onSync, enabled = !syncing) {
+        Icon(
+            Icons.Rounded.Refresh,
+            contentDescription = if (syncing) "Syncing" else "Sync",
+            tint = if (syncing) Fresh.Sky else Fresh.Text,
+            modifier = Modifier.size(22.dp).then(if (syncing) Modifier.rotate(angle) else Modifier)
+        )
+    }
+}
+
+@Composable
+private fun MoreMenu(
+    lockEnabled: Boolean,
+    onLockChange: (Boolean) -> Unit,
+    reminders: Reminders.Settings,
+    onRemindersChange: (Reminders.Settings) -> Unit,
+    onPickTime: () -> Unit,
+    onOpenBackup: () -> Unit
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        GlassIconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Fresh.Text) }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            DropdownMenuItem(
+                text = { Text("Fingerprint lock") },
+                trailingIcon = { Switch(checked = lockEnabled, onCheckedChange = null) },
+                onClick = { onLockChange(!lockEnabled) }
+            )
+            DropdownMenuItem(
+                text = { Text("Daily due-date reminder") },
+                trailingIcon = { Switch(checked = reminders.enabled, onCheckedChange = null) },
+                onClick = { onRemindersChange(reminders.copy(enabled = !reminders.enabled)) }
+            )
+            DropdownMenuItem(
+                text = { Text("Reminder time: ${reminders.time.format(TIME_FORMAT)}") },
+                enabled = reminders.enabled,
+                onClick = { open = false; onPickTime() }
+            )
+            DropdownMenuItem(
+                text = { Text("Google Drive backup") },
+                onClick = { open = false; onOpenBackup() }
+            )
+        }
+    }
+}
+
+/** Glass capsule with a gradient pill that slides between the two tabs. */
+@Composable
+private fun TabSwitcher(tab: Int, labels: List<String>, counts: List<Int>, onSelect: (Int) -> Unit) {
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp).glass(PILL).padding(4.dp)
+    ) {
+        val segment = maxWidth / labels.size
+        val x by animateDpAsState(segment * tab, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow), label = "tab")
+        Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Fresh.accentHorizontal))
+        Row(Modifier.fillMaxSize()) {
+            labels.forEachIndexed { i, label ->
+                val selected = tab == i
+                val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "fg")
+                Row(
+                    Modifier.weight(1f).fillMaxHeight().clip(PILL).clickable { onSelect(i) },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = fg)
+                    if (counts[i] > 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            Modifier.clip(PILL).background(if (selected) Color(0x33FFFFFF) else Fresh.Glass)
+                                .padding(horizontal = 7.dp, vertical = 1.dp)
+                        ) {
+                            Text("${counts[i]}", style = MaterialTheme.typography.labelMedium, color = fg)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewActionFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val glow = rememberInfiniteTransition(label = "fab")
+    val halo by glow.animateFloat(
+        initialValue = 0.35f, targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
+        label = "halo"
+    )
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(PILL).background(Fresh.Teal.copy(alpha = halo * 0.35f)))
+        Row(
+            Modifier.clip(PILL).background(Fresh.accent).clickable(onClick = onClick)
+                .padding(horizontal = 22.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("New", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun GradientButton(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Row(
+        modifier.clip(PILL)
+            .background(if (enabled) Fresh.accentHorizontal else Brush.linearGradient(listOf(Fresh.Glass, Fresh.Glass)))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val fg = if (enabled) Color.White else Fresh.TextDim
+        if (icon != null) {
+            Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = MaterialTheme.typography.titleSmall, color = fg)
+    }
+}
+
+@Composable
 private fun ReminderTimeDialog(initial: LocalTime, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
     val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = false)
     AlertDialog(
@@ -349,61 +523,46 @@ private fun ReminderTimeDialog(initial: LocalTime, onDismiss: () -> Unit, onConf
 }
 
 @Composable
-private fun SyncButton(syncing: Boolean, onSync: () -> Unit) {
-    val spin = rememberInfiniteTransition(label = "spin")
-    val angle by spin.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
-        label = "angle"
-    )
-    FilledTonalIconButton(onClick = onSync, enabled = !syncing) {
-        Icon(
-            Icons.Rounded.Refresh,
-            contentDescription = if (syncing) "Syncing" else "Sync",
-            modifier = if (syncing) Modifier.rotate(angle) else Modifier
-        )
-    }
-}
-
-@Composable
 private fun MessageBanner(text: String, onClose: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+            .glass(RoundedCornerShape(16.dp), strong = true)
+            .padding(start = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Dismiss message", Modifier.size(18.dp)) }
-        }
+        Icon(Icons.Rounded.Info, null, tint = Fresh.Sky, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Dismiss message", Modifier.size(18.dp), tint = Fresh.TextDim) }
     }
 }
 
 @Composable
 private fun EmptyState(icon: ImageVector, title: String, body: String, action: (@Composable () -> Unit)? = null) {
+    val bob = rememberInfiniteTransition(label = "bob")
+    val dy by bob.animateFloat(
+        initialValue = -6f, targetValue = 6f,
+        animationSpec = infiniteRepeatable(tween(2200), RepeatMode.Reverse),
+        label = "dy"
+    )
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(32.dp))
         Box(
-            Modifier.size(88.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
+            Modifier.offset(y = dy.dp).size(92.dp).clip(RoundedCornerShape(30.dp)).background(Fresh.accent),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(40.dp))
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(42.dp))
         }
-        Spacer(Modifier.height(20.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            body, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center
-        )
+        Spacer(Modifier.height(24.dp))
+        Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim, textAlign = TextAlign.Center)
         if (action != null) {
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
             action()
         }
     }
@@ -419,32 +578,36 @@ private fun SuggestedList(items: List<Item>, vm: MainVM, onEdit: (Item) -> Unit,
             title = "Inbox zero",
             body = "Nothing to review. Sync to scan Gmail and Calendar for new action items."
         ) {
-            Button(onClick = onSync, enabled = !vm.syncing) {
-                Icon(Icons.Rounded.Refresh, null, Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text("Sync now")
-            }
+            GradientButton("Sync now", Icons.Rounded.Refresh, onSync, enabled = !vm.syncing)
         }
         return
     }
+    var expanded by remember { mutableStateOf<Long?>(null) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item(key = "intro") {
-            Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
-                Text("${items.size} to review", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Found in Gmail and Calendar. Add the ones that matter.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "${items.size} TO REVIEW",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Fresh.TextDim,
+                    modifier = Modifier.weight(1f)
                 )
+                TextButton(onClick = { vm.confirmAll(items) }) {
+                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Fresh.Green)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add all", color = Fresh.Green, style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
         items(items, key = { it.id }) { item ->
-            SuggestionCard(
+            SuggestionRow(
                 item,
+                expanded = expanded == item.id,
+                onToggle = { expanded = if (expanded == item.id) null else item.id },
                 onAdd = { vm.confirm(item) },
                 onEdit = { onEdit(item) },
                 onDismiss = { vm.dismiss(item) },
@@ -454,90 +617,92 @@ private fun SuggestedList(items: List<Item>, vm: MainVM, onEdit: (Item) -> Unit,
     }
 }
 
+/** One compact suggestion: icon, one-line title, one-line meta, inline dismiss/add. Tap to expand. */
 @Composable
-private fun SuggestionCard(
+private fun SuggestionRow(
     item: Item,
+    expanded: Boolean,
+    onToggle: () -> Unit,
     onAdd: () -> Unit,
     onEdit: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cs = MaterialTheme.colorScheme
-    ElevatedCard(
-        modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.elevatedCardColors(containerColor = cs.surfaceContainerLow)
+    val tint = sourceColor(item.source)
+    Column(
+        modifier.fillMaxWidth()
+            .glass(ROW_SHAPE, strong = expanded)
+            .clickable(onClick = onToggle)
+            .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
-                Box(
-                    Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(cs.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(sourceIcon(item.source), null, tint = cs.onPrimaryContainer, modifier = Modifier.size(22.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(sourceIcon(item.source), null, tint = tint, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = if (expanded) 4 else 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        shortDue(item.dueDate),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = dueColor(item.dueDate)
+                    )
+                    Text(
+                        "  ·  ${item.person}  ·  ${item.context}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Fresh.TextDim,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(sourceLabel(item.source), style = MaterialTheme.typography.labelMedium, color = cs.primary)
-                    Text(item.title, style = MaterialTheme.typography.titleMedium)
-                    if (item.notes.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            item.notes, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant
-                        )
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Rounded.Close, "Dismiss", tint = Fresh.TextDim, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(2.dp))
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(Fresh.accent).clickable(onClick = onAdd),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Check, "Add", tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+        }
+        AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Column(Modifier.padding(start = 40.dp, top = 6.dp, end = 6.dp)) {
+                if (item.notes.isNotBlank()) {
+                    Text(
+                        item.notes, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall, color = Fresh.TextDim
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (item.source) {
+                            "GMAIL" -> "From Gmail"
+                            "CALENDAR" -> "From Calendar"
+                            else -> "Added by you"
+                        } + " · due ${fullDate(item.dueDate)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tint,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onEdit) {
+                        Icon(Icons.Rounded.Edit, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Edit")
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                DuePill(item.dueDate)
-                MetaPill(Icons.Rounded.Person, item.person)
-                MetaPill(contextIcon(item.context), item.context)
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss) { Text("Dismiss", color = cs.onSurfaceVariant) }
-                Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = onEdit, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-                    Icon(Icons.Rounded.Edit, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Edit")
-                }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = onAdd, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Add")
-                }
-            }
         }
     }
-}
-
-@Composable
-private fun MetaPill(icon: ImageVector, text: String, container: Color? = null, content: Color? = null) {
-    val cs = MaterialTheme.colorScheme
-    Surface(color = container ?: cs.surfaceContainerHighest, contentColor = content ?: cs.onSurfaceVariant, shape = CircleShape) {
-        Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, Modifier.size(14.dp))
-            Spacer(Modifier.width(5.dp))
-            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-        }
-    }
-}
-
-@Composable
-private fun DuePill(dueDate: Long) {
-    val cs = MaterialTheme.colorScheme
-    val diff = dueDate - today()
-    val (bg, fg) = when {
-        diff < 0 -> cs.errorContainer to cs.onErrorContainer
-        diff == 0L -> cs.tertiaryContainer to cs.onTertiaryContainer
-        else -> cs.surfaceContainerHighest to cs.onSurfaceVariant
-    }
-    val text = if (diff in 0L..1L) dateLabel(dueDate) else fullDate(dueDate)
-    MetaPill(Icons.Rounded.DateRange, if (diff < 0) "Overdue · $text" else text, bg, fg)
 }
 
 // ---------------------------------------------------------------- Actions
@@ -565,36 +730,23 @@ private fun ActionsList(
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        item(key = "summary") { SummaryCard(open) }
         item(key = "group") {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Group.entries.forEachIndexed { i, g ->
-                    SegmentedButton(
-                        selected = group == g,
-                        onClick = { onGroup(g) },
-                        shape = SegmentedButtonDefaults.itemShape(i, Group.entries.size)
-                    ) { Text(g.label) }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("GROUP BY", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
+                Spacer(Modifier.width(2.dp))
+                Group.entries.forEach { g -> GroupChip(g.label, group == g) { onGroup(g) } }
             }
         }
         if (sections.isEmpty()) {
             item(key = "empty") {
-                Column(
-                    Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Rounded.CheckCircle, null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text("No actions yet", style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Nothing yet", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "Tap New action to add one, or review Suggested.",
+                        "Tap New to add one, or review Suggested.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Fresh.TextDim
                     )
                 }
             }
@@ -617,80 +769,37 @@ private fun ActionsList(
 }
 
 @Composable
-private fun SummaryCard(open: List<Item>) {
-    val cs = MaterialTheme.colorScheme
-    val t = today()
-    val overdue = open.count { it.dueDate < t }
-    val dueToday = open.count { it.dueDate == t }
+private fun GroupChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "chip")
     Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
-            .background(Brush.linearGradient(listOf(cs.primaryContainer, cs.tertiaryContainer)))
-            .padding(20.dp)
+        Modifier.clip(PILL)
+            .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier.glass(PILL))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
     ) {
-        Column {
-            Text(
-                LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d")),
-                style = MaterialTheme.typography.labelLarge,
-                color = cs.onPrimaryContainer.copy(alpha = 0.8f)
-            )
-            Text(
-                when {
-                    open.isEmpty() -> "All clear"
-                    overdue > 0 -> "Let's catch up"
-                    dueToday > 0 -> "Focus on today"
-                    else -> "You're ahead"
-                },
-                style = MaterialTheme.typography.headlineSmall,
-                color = cs.onPrimaryContainer
-            )
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stat("Overdue", overdue, if (overdue > 0) cs.error else cs.onPrimaryContainer, Modifier.weight(1f))
-                Stat("Today", dueToday, cs.onPrimaryContainer, Modifier.weight(1f))
-                Stat("Open", open.size, cs.onPrimaryContainer, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f), shape = MaterialTheme.shapes.medium, modifier = modifier) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text("$value", style = MaterialTheme.typography.headlineSmall, color = color)
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Text(label, style = MaterialTheme.typography.labelLarge, color = fg)
     }
 }
 
 @Composable
 private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
     val accent = when {
-        label == "Done" -> cs.outline
-        group == Group.DATE && label == "Overdue" -> cs.error
-        group == Group.DATE && label == "Today" -> cs.primary
-        group == Group.DATE && label == "Tomorrow" -> cs.tertiary
-        else -> cs.secondary
+        label == "Done" -> Fresh.TextDim
+        group == Group.DATE && label == "Overdue" -> Fresh.Coral
+        group == Group.DATE && label == "Today" -> Fresh.Sky
+        group == Group.DATE && label == "Tomorrow" -> Fresh.Amber
+        group == Group.PERSON -> personColor(label)
+        else -> Fresh.Indigo
     }
     Row(
-        modifier.fillMaxWidth().padding(start = 4.dp, top = 16.dp, bottom = 2.dp),
+        modifier.fillMaxWidth().padding(start = 4.dp, top = 14.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        when {
-            label == "Done" -> Icon(Icons.Rounded.CheckCircle, null, tint = accent, modifier = Modifier.size(20.dp))
-            group == Group.PERSON -> PersonAvatar(label, 22.dp)
-            group == Group.CONTEXT -> Icon(contextIcon(label), null, tint = accent, modifier = Modifier.size(20.dp))
-            else -> Box(Modifier.size(10.dp).clip(CircleShape).background(accent))
-        }
+        Box(Modifier.width(18.dp).height(4.dp).clip(PILL).background(accent))
         Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.titleSmall, color = accent)
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp), color = accent)
         Spacer(Modifier.width(8.dp))
-        Surface(color = accent.copy(alpha = 0.14f), contentColor = accent, shape = CircleShape) {
-            Text("$count", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
-        }
+        Text("$count", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
     }
 }
 
@@ -703,62 +812,81 @@ private fun ActionRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cs = MaterialTheme.colorScheme
     val isDone = item.status == STATUS_DONE
-    val overdue = !isDone && item.dueDate < today()
-    Card(
-        onClick = onEdit,
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = if (isDone) cs.surfaceContainerLow else cs.surfaceContainer)
+    Row(
+        modifier.fillMaxWidth()
+            .glass(ROW_SHAPE)
+            .clickable(onClick = onEdit)
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = isDone, onCheckedChange = { onToggle() })
-            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+        GlowCheck(isDone, onToggle)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (isDone) Fresh.TextDim else Fresh.Text,
+                textDecoration = if (isDone) TextDecoration.LineThrough else null,
+                maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PersonAvatar(item.person, 16.dp)
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    item.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isDone) cs.onSurfaceVariant else cs.onSurface,
-                    textDecoration = if (isDone) TextDecoration.LineThrough else null,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                    if (group == Group.DATE && !isDone) shortDue(item.dueDate) else dateLabel(item.dueDate),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = dueColor(item.dueDate, isDone)
                 )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PersonAvatar(item.person, 18.dp)
-                    Spacer(Modifier.width(6.dp))
-                    val parts = buildList {
-                        if (group != Group.PERSON) add(item.person)
-                        if (group != Group.CONTEXT) add(item.context)
-                        add(if (group == Group.DATE && !isDone) fullDate(item.dueDate) else dateLabel(item.dueDate))
-                    }
+                val rest = buildList {
+                    if (group != Group.PERSON) add(item.person)
+                    if (group != Group.CONTEXT) add(item.context)
+                }
+                if (rest.isNotEmpty()) {
                     Text(
-                        parts.joinToString("  ·  "),
+                        rest.joinToString(prefix = "  ·  ", separator = "  ·  "),
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (overdue) cs.error else cs.onSurfaceVariant,
+                        color = Fresh.TextDim,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, "Delete", tint = cs.onSurfaceVariant)
-            }
         }
+        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Outlined.Delete, "Delete", tint = Fresh.TextDim, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** Round check that fills with the accent gradient and pops when ticked. */
+@Composable
+private fun GlowCheck(checked: Boolean, onToggle: () -> Unit) {
+    val pop by animateFloatAsState(
+        if (checked) 1f else 0.85f,
+        spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMedium),
+        label = "pop"
+    )
+    Box(
+        Modifier.size(26.dp).scale(pop).clip(CircleShape)
+            .then(
+                if (checked) Modifier.background(Fresh.accent)
+                else Modifier.border(2.dp, Fresh.accent, CircleShape)
+            )
+            .clickable(onClick = onToggle),
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) Icon(Icons.Rounded.Check, "Mark not done", tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }
 
 @Composable
 private fun PersonAvatar(name: String, size: Dp) {
-    val cs = MaterialTheme.colorScheme
-    val (bg, fg) = when (Math.floorMod(name.hashCode(), 3)) {
-        0 -> cs.primaryContainer to cs.onPrimaryContainer
-        1 -> cs.secondaryContainer to cs.onSecondaryContainer
-        else -> cs.tertiaryContainer to cs.onTertiaryContainer
-    }
-    Box(Modifier.size(size).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+    val c = personColor(name)
+    Box(Modifier.size(size).clip(CircleShape).background(c.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) {
         Text(
             name.trim().take(1).uppercase().ifEmpty { "?" },
-            color = fg,
-            fontSize = (size.value * 0.5f).sp,
+            color = c,
+            fontSize = (size.value * 0.55f).sp,
             style = MaterialTheme.typography.labelLarge
         )
     }
@@ -776,14 +904,18 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
     var pickDate by remember { mutableStateOf(false) }
     val t = today()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 if (item.id == 0L) "New action" else "Edit action",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineMedium.copy(brush = Fresh.accentHorizontal)
             )
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
@@ -830,9 +962,10 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
 
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
                 Spacer(Modifier.weight(1f))
-                Button(
+                GradientButton(
+                    "Save", Icons.Rounded.Check,
                     enabled = title.isNotBlank(),
                     onClick = {
                         onSave(
@@ -843,13 +976,8 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
                                 dueDate = due
                             )
                         )
-                    },
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding
-                ) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Save")
-                }
+                    }
+                )
             }
         }
     }
@@ -874,9 +1002,9 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
 @Composable
 private fun SheetLabel(text: String) {
     Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        color = Fresh.Teal,
         modifier = Modifier.padding(top = 4.dp)
     )
 }

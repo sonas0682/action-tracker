@@ -2,6 +2,7 @@ package com.sonas.actiontracker.ui
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -10,11 +11,17 @@ import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.sync.Backup
+import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
 import com.sonas.actiontracker.widget.DueWidget
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.DateFormat
+import java.util.Date
 
 class MainVM(app: Application) : AndroidViewModel(app) {
     private val dao = Db.get(app).dao()
@@ -28,6 +35,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
 
     /** Confirms a suggestion: it becomes a regular open action. */
     fun confirm(item: Item) = write { dao.update(item.copy(status = STATUS_OPEN)) }
+
+    /** Confirms every suggestion currently on screen in one go. */
+    fun confirmAll(items: List<Item>) = write { items.forEach { dao.update(it.copy(status = STATUS_OPEN)) } }
 
     /** Dismisses a suggestion. The source stays in `processed`, so it never comes back. */
     fun dismiss(item: Item) = viewModelScope.launch { dao.delete(item) }
@@ -48,6 +58,57 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         runCatching { DueWidget.refresh(getApplication()) }
     }
 
+    var backupStatus by mutableStateOf(Backup.status(app))
+        private set
+    var backupBusy by mutableStateOf(false)
+        private set
+    /** Bumped after every successful backup or restore, so the dialog can move on. */
+    var backupSuccesses by mutableIntStateOf(0)
+        private set
+
+    /** Turns on Drive backup with [passphrase] and makes the first backup. */
+    fun enableBackup(passphrase: String, token: String) = backupJob("Backed up to Google Drive") {
+        withContext(Dispatchers.Default) { Backup.enable(getApplication(), passphrase.toCharArray()) }
+        Backup.backUp(getApplication(), token)
+    }
+
+    fun backUpNow(token: String) = backupJob("Backed up to Google Drive") { Backup.backUp(getApplication(), token) }
+
+    /** Replaces everything on this phone with the Drive backup. */
+    fun restoreBackup(passphrase: String, token: String) = backupJob(null) {
+        val n = Backup.restore(getApplication(), token, passphrase.toCharArray())
+        runCatching { DueWidget.refresh(getApplication()) }
+        message = "Restored $n action(s) from Google Drive"
+    }
+
+    fun disableBackup() {
+        Backup.disable(getApplication())
+        backupStatus = Backup.status(getApplication())
+    }
+
+    fun lastBackupLabel(): String = backupStatus.lastBackupAt
+        ?.let { "Last backup: " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)) }
+        ?: "No backup yet"
+
+    private fun backupJob(done: String?, block: suspend () -> Unit) {
+        if (backupBusy) return
+        viewModelScope.launch {
+            backupBusy = true
+            try {
+                block()
+                done?.let { message = it }
+                backupSuccesses++
+            } catch (e: Exception) {
+                message = "Backup failed: ${e.message}"
+            }
+            backupStatus = Backup.status(getApplication())
+            backupBusy = false
+        }
+    }
+
+    /** Runs the on-device Gemini Nano title pass over new Gmail suggestions. Needs the app in the foreground. */
+    fun smartTitles() = viewModelScope.launch { SmartTitles.run(getApplication()) }
+
     fun sync(token: String) {
         if (syncing) return
         viewModelScope.launch {
@@ -59,6 +120,7 @@ class MainVM(app: Application) : AndroidViewModel(app) {
                 "Sync failed: ${e.message}"
             }
             syncing = false
+            SmartTitles.run(getApplication())
         }
     }
 }

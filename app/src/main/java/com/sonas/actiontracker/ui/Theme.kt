@@ -1,132 +1,157 @@
 package com.sonas.actiontracker.ui
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.cos
+import kotlin.math.sin
 
-// Brand palette ("Indigo + Teal"), used when wallpaper colors are off or unavailable.
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF4F5BD5),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDFE0FF),
-    onPrimaryContainer = Color(0xFF0B1366),
-    secondary = Color(0xFF5C5D72),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE1E0F9),
-    onSecondaryContainer = Color(0xFF191A2C),
-    tertiary = Color(0xFF006A60),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFF9EF2E4),
-    onTertiaryContainer = Color(0xFF00201C),
-    error = Color(0xFFBA1A1A),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFFBF8FF),
-    onBackground = Color(0xFF1B1B21),
-    surface = Color(0xFFFBF8FF),
-    onSurface = Color(0xFF1B1B21),
-    surfaceVariant = Color(0xFFE3E1EC),
-    onSurfaceVariant = Color(0xFF46464F),
-    outline = Color(0xFF777680),
-    outlineVariant = Color(0xFFC7C5D0),
-    inverseSurface = Color(0xFF303036),
-    inverseOnSurface = Color(0xFFF2EFF7),
-    inversePrimary = Color(0xFFBCC2FF),
-    surfaceDim = Color(0xFFDBD9E0),
-    surfaceBright = Color(0xFFFBF8FF),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF5F2FA),
-    surfaceContainer = Color(0xFFEFEDF4),
-    surfaceContainerHigh = Color(0xFFE9E7EF),
-    surfaceContainerHighest = Color(0xFFE4E1E9),
-)
+/**
+ * "Fresh" palette: airy off-white canvas, an indigo → sky → teal accent gradient,
+ * soft pastel glows and white glass surfaces.
+ */
+object Fresh {
+    val Canvas = Color(0xFFF6F7FC)
+    val Indigo = Color(0xFF5B5FEF)
+    val Teal = Color(0xFF12B5A6)
+    val Amber = Color(0xFFD98200)
+    val Sky = Color(0xFF1E90E8)
+    val Green = Color(0xFF16A36A)
+    val Coral = Color(0xFFE5484D)
+    val Text = Color(0xFF1B1D33)
+    val TextDim = Color(0xFF6A6E8C)
+    val Glass = Color(0xCCFFFFFF)
+    val GlassStrong = Color(0xFFFFFFFF)
+    val Rim = Color(0x1A1B1D33)
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFFBCC2FF),
-    onPrimary = Color(0xFF1D2678),
-    primaryContainer = Color(0xFF3A44A6),
-    onPrimaryContainer = Color(0xFFDFE0FF),
-    secondary = Color(0xFFC5C4DD),
-    onSecondary = Color(0xFF2E2F42),
-    secondaryContainer = Color(0xFF444559),
-    onSecondaryContainer = Color(0xFFE1E0F9),
-    tertiary = Color(0xFF82D5C8),
-    onTertiary = Color(0xFF003731),
-    tertiaryContainer = Color(0xFF005048),
-    onTertiaryContainer = Color(0xFF9EF2E4),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF131318),
-    onBackground = Color(0xFFE4E1E9),
-    surface = Color(0xFF131318),
-    onSurface = Color(0xFFE4E1E9),
-    surfaceVariant = Color(0xFF46464F),
-    onSurfaceVariant = Color(0xFFC7C5D0),
-    outline = Color(0xFF91909A),
-    outlineVariant = Color(0xFF46464F),
-    inverseSurface = Color(0xFFE4E1E9),
-    inverseOnSurface = Color(0xFF303036),
-    inversePrimary = Color(0xFF4F5BD5),
-    surfaceDim = Color(0xFF131318),
-    surfaceBright = Color(0xFF39383F),
-    surfaceContainerLowest = Color(0xFF0E0E13),
-    surfaceContainerLow = Color(0xFF1B1B21),
-    surfaceContainer = Color(0xFF1F1F25),
-    surfaceContainerHigh = Color(0xFF2A292F),
-    surfaceContainerHighest = Color(0xFF35343A),
+    val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
+    val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))
+}
+
+private val FreshColors = lightColorScheme(
+    primary = Fresh.Indigo,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE1E2FF),
+    onPrimaryContainer = Color(0xFF14165E),
+    secondary = Fresh.Teal,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD3F5F0),
+    onSecondaryContainer = Color(0xFF00201C),
+    tertiary = Fresh.Sky,
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFD6EBFF),
+    onTertiaryContainer = Color(0xFF00213A),
+    error = Fresh.Coral,
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD8),
+    onErrorContainer = Color(0xFF410006),
+    background = Fresh.Canvas,
+    onBackground = Fresh.Text,
+    surface = Fresh.Canvas,
+    onSurface = Fresh.Text,
+    surfaceVariant = Color(0xFFE6E7F2),
+    onSurfaceVariant = Fresh.TextDim,
+    outline = Color(0xFF9396B0),
+    outlineVariant = Color(0xFFD5D7E6),
+    inverseSurface = Fresh.Text,
+    inverseOnSurface = Fresh.Canvas,
+    inversePrimary = Color(0xFFBEC1FF),
+    surfaceDim = Color(0xFFDDDFEC),
+    surfaceBright = Color.White,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF9FAFE),
+    surfaceContainer = Color(0xFFF1F2F9),
+    surfaceContainerHigh = Color(0xFFEBECF5),
+    surfaceContainerHighest = Color(0xFFE5E7F1),
 )
 
 private val base = Typography()
 
 private val AppTypography = Typography(
-    displaySmall = base.displaySmall.copy(fontWeight = FontWeight.SemiBold),
-    headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
-    headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.25).sp),
-    headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-    titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-    titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-    labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-    labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium),
+    displayLarge = base.displayLarge.copy(fontWeight = FontWeight.Black, letterSpacing = (-2).sp),
+    displayMedium = base.displayMedium.copy(fontWeight = FontWeight.Black, letterSpacing = (-1.5).sp),
+    displaySmall = base.displaySmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
+    headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
+    headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
+    headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
+    titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Bold),
+    titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Bold),
+    titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Bold),
+    bodyLarge = base.bodyLarge.copy(fontWeight = FontWeight.Medium),
+    labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
+    labelMedium = base.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+    labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp),
 )
 
 private val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp),
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(36.dp),
 )
 
-/**
- * Material 3 theme. With [dynamicColor] on (Android 12+), colors follow the wallpaper
- * (Material You); otherwise the brand palette above is used. Light/dark follows the system.
- */
+/** Light Fresh theme. Dialogs, sheets and pickers pick it up through MaterialTheme. */
 @Composable
-fun AppTheme(dynamicColor: Boolean = true, content: @Composable () -> Unit) {
-    val ctx = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val scheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= 31 ->
-            if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dark -> DarkColors
-        else -> LightColors
-    }
-    MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
+fun AppTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = FreshColors, typography = AppTypography, shapes = AppShapes, content = content)
+}
+
+/** Frosted-glass surface: a faint white tint with a light rim, like a pane over the aurora. */
+fun Modifier.glass(shape: Shape, strong: Boolean = false): Modifier =
+    this.clip(shape)
+        .background(if (strong) Fresh.GlassStrong else Fresh.Glass)
+        .border(1.dp, Fresh.Rim, shape)
+
+/** Full-screen canvas with slowly drifting violet, magenta and cyan glows behind the content. */
+@Composable
+fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val drift = rememberInfiniteTransition(label = "aurora")
+    val t by drift.animateFloat(
+        initialValue = 0f, targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(24_000, easing = LinearEasing), RepeatMode.Restart),
+        label = "t"
+    )
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(Fresh.Canvas)
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                fun glow(color: Color, cx: Float, cy: Float, r: Float) = drawCircle(
+                    Brush.radialGradient(listOf(color, Color.Transparent), center = Offset(cx, cy), radius = r),
+                    radius = r, center = Offset(cx, cy)
+                )
+                glow(Fresh.Indigo.copy(alpha = 0.16f), w * (0.15f + 0.10f * cos(t)), h * (0.08f + 0.04f * sin(t)), w * 0.85f)
+                glow(Fresh.Teal.copy(alpha = 0.14f), w * (0.95f + 0.08f * sin(t)), h * (0.22f + 0.05f * cos(t)), w * 0.70f)
+                glow(Fresh.Sky.copy(alpha = 0.12f), w * (0.30f + 0.12f * sin(t * 2)), h * (0.92f + 0.03f * cos(t)), w * 0.80f)
+            },
+        content = content
+    )
 }
