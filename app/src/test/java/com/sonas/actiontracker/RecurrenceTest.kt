@@ -29,7 +29,7 @@ class RecurrenceTest {
     @Test fun weeklyKeepsTheWeekday() {
         assertEquals(fri.plusWeeks(1), Recurrence.WEEKLY.nextDue(fri, fri))
         assertEquals(fri.plusWeeks(1), Recurrence.WEEKLY.nextDue(fri, sat))
-        assertEquals(fri.plusWeeks(4), Recurrence.WEEKLY.nextDue(fri.minusWeeks(2), fri.plusDays(10)))
+        assertEquals(fri.plusWeeks(2), Recurrence.WEEKLY.nextDue(fri.minusWeeks(2), fri.plusDays(10)))
     }
 
     @Test fun monthlyKeepsTheDayWithoutDrift() {
