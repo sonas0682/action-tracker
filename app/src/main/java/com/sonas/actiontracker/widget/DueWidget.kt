@@ -51,12 +51,14 @@ import com.sonas.actiontracker.MainActivity
 import com.sonas.actiontracker.R
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.data.TimeOfDay
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
  * Home-screen widget: Today (overdue included) and Tomorrow tabs with their counts,
- * and the selected day's open actions as cards. Tap a tab to switch days, tap the
+ * and the selected day's open actions as cards under Morning / Afternoon / Evening /
+ * Night headers. Tap a tab to switch days, tap the
  * circle to mark an action done, tap anything else to open the app.
  */
 class DueWidget : GlanceAppWidget() {
@@ -190,8 +192,14 @@ private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean) {
                 )
             }
         } else {
+            val rows = shown.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap().flatMap { (time, list) ->
+                listOf<Any>(time) + list
+            }
             LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-                items(shown, itemId = { it.id }) { item -> ActionCard(item, epochDay, accent) }
+                // Headers get negative ids so they never collide with item ids.
+                items(rows, itemId = { if (it is Item) it.id else -1L - (it as TimeOfDay).ordinal }) { row ->
+                    if (row is Item) ActionCard(row, epochDay, accent) else TimeHeader(row as TimeOfDay, accent)
+                }
             }
         }
     }
@@ -225,6 +233,15 @@ private fun DayTab(
             }
         }
     }
+}
+
+@Composable
+private fun TimeHeader(time: TimeOfDay, accent: Color) {
+    Text(
+        time.label.uppercase(),
+        modifier = GlanceModifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp, bottom = 3.dp),
+        style = TextStyle(color = c(accent), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    )
 }
 
 @Composable

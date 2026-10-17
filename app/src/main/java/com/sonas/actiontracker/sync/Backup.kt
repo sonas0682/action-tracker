@@ -19,6 +19,7 @@ import com.google.android.gms.common.api.Scope
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Processed
+import com.sonas.actiontracker.data.TimeOfDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -139,6 +140,7 @@ object Backup {
                     .put("title", i.title).put("notes", i.notes).put("person", i.person)
                     .put("context", i.context).put("dueDate", i.dueDate).put("status", i.status)
                     .put("source", i.source).put("createdAt", i.createdAt).put("body", i.body)
+                    .put("timeOfDay", i.timeOfDay)
                     .apply { i.completedAt?.let { put("completedAt", it) } }
             )
         }
@@ -157,14 +159,16 @@ object Backup {
             dao.deleteAllProcessed()
             for (n in 0 until items.length()) {
                 val o = items.getJSONObject(n)
+                val ctx = o.optString("context", "Work")
                 dao.insert(
                     Item(
                         title = o.getString("title"), notes = o.optString("notes"),
-                        person = o.optString("person", "Me"), context = o.optString("context", "Work"),
+                        person = o.optString("person", "Me"), context = ctx,
                         dueDate = o.getLong("dueDate"), status = o.getString("status"),
                         source = o.optString("source", "CUSTOM"), createdAt = o.optLong("createdAt"),
                         body = o.optString("body"),
-                        completedAt = if (o.has("completedAt")) o.getLong("completedAt") else null
+                        completedAt = if (o.has("completedAt")) o.getLong("completedAt") else null,
+                        timeOfDay = o.optString("timeOfDay", TimeOfDay.defaultFor(ctx).name)
                     )
                 )
             }
