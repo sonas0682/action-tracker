@@ -5,11 +5,4 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
-
-    <!-- WidgetRefreshActivity: no window, no animation, no dimming. -->
-    <style name="Theme.ActionTracker.Invisible" parent="android:Theme.Translucent.NoTitleBar">
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowAnimationStyle">@null</item>
-        <item name="android:backgroundDimEnabled">false</item>
-    </style>
 </resources>

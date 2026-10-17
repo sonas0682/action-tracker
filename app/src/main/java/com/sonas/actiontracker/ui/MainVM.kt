@@ -15,7 +15,6 @@ import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
 import com.sonas.actiontracker.widget.DueWidget
-import com.sonas.actiontracker.widget.WidgetSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -60,15 +59,6 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     private fun write(block: suspend () -> Unit) = viewModelScope.launch {
         block()
         runCatching { DueWidget.refresh(getApplication()) }
-        widgetSummary()
-    }
-
-    /**
-     * Re-summarizes today's actions with Gemini Nano for the widget (the app is in the
-     * foreground, which Nano needs), then redraws it. No-op when nothing changed.
-     */
-    fun widgetSummary() = viewModelScope.launch {
-        if (WidgetSummary.summarize(getApplication())) runCatching { DueWidget.refresh(getApplication()) }
     }
 
     var backupStatus by mutableStateOf(Backup.status(app))
@@ -91,7 +81,6 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     fun restoreBackup(passphrase: String, token: String) = backupJob(null) {
         val n = Backup.restore(getApplication(), token, passphrase.toCharArray())
         runCatching { DueWidget.refresh(getApplication()) }
-        widgetSummary()
         message = "Restored $n action(s) from Google Drive"
     }
 

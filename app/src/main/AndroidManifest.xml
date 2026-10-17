@@ -29,15 +29,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Invisible screen the widget's refresh button and tick boxes open so Gemini Nano can run. -->
-        <activity
-            android:name=".widget.WidgetRefreshActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.ActionTracker.Invisible" />
-
         <receiver
             android:name=".widget.DueWidgetReceiver"
             android:exported="true"
