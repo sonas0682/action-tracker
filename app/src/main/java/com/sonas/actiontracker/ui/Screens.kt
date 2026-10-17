@@ -277,7 +277,7 @@ fun AppScreen(
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
-    var group by remember { mutableStateOf(Group.TIME) }
+    var group by rememberSaveable { mutableStateOf(Group.DATE) }
     var insights by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
