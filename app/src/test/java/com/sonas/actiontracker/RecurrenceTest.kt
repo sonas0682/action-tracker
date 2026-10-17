@@ -3,44 +3,46 @@ package com.sonas.actiontracker
 import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.sync.VoiceDraft
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
 
 class RecurrenceTest {
     private val fri = LocalDate.of(2026, 10, 16)
-    private val sat = LocalDate.of(2026, 10, 17)
 
-    @Test fun noneHasNoNextDate() = assertNull(Recurrence.NONE.nextDue(fri, fri))
+    private fun Recurrence.first(start: LocalDate, n: Int) = dates(start).take(n).toList()
 
-    @Test fun dailyOnTimeAndOverdue() {
-        assertEquals(sat, Recurrence.DAILY.nextDue(fri, fri))
-        // Ten days late: next is tomorrow, not a backlog of past days.
-        assertEquals(sat.plusDays(1), Recurrence.DAILY.nextDue(fri.minusDays(10), sat))
-        // Done early: the day after its own due date.
-        assertEquals(fri.plusDays(4), Recurrence.DAILY.nextDue(fri.plusDays(3), fri))
-    }
+    @Test fun noneIsJustTheStart() = assertEquals(listOf(fri), Recurrence.NONE.first(fri, 5))
 
-    @Test fun weekdaysSkipTheWeekend() {
-        assertEquals(LocalDate.of(2026, 10, 19), Recurrence.WEEKDAYS.nextDue(fri, fri))
-        assertEquals(LocalDate.of(2026, 10, 19), Recurrence.WEEKDAYS.nextDue(fri, sat))
-    }
+    @Test fun daily() = assertEquals(listOf(fri, fri.plusDays(1), fri.plusDays(2)), Recurrence.DAILY.first(fri, 3))
 
-    @Test fun weeklyKeepsTheWeekday() {
-        assertEquals(fri.plusWeeks(1), Recurrence.WEEKLY.nextDue(fri, fri))
-        assertEquals(fri.plusWeeks(1), Recurrence.WEEKLY.nextDue(fri, sat))
-        assertEquals(fri.plusWeeks(2), Recurrence.WEEKLY.nextDue(fri.minusWeeks(2), fri.plusDays(10)))
-    }
+    @Test fun weekdaysSkipTheWeekend() =
+        assertEquals(listOf(fri, LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 20)), Recurrence.WEEKDAYS.first(fri, 3))
+
+    @Test fun weeklyKeepsTheWeekday() =
+        assertEquals(listOf(fri, fri.plusWeeks(1), fri.plusWeeks(2)), Recurrence.WEEKLY.first(fri, 3))
 
     @Test fun monthlyKeepsTheDayWithoutDrift() {
         val jan31 = LocalDate.of(2026, 1, 31)
-        assertEquals(LocalDate.of(2026, 2, 28), Recurrence.MONTHLY.nextDue(jan31, jan31))
-        assertEquals(LocalDate.of(2026, 3, 31), Recurrence.MONTHLY.nextDue(jan31, LocalDate.of(2026, 3, 1)))
+        assertEquals(
+            listOf(jan31, LocalDate.of(2026, 2, 28), LocalDate.of(2026, 3, 31), LocalDate.of(2026, 4, 30)),
+            Recurrence.MONTHLY.first(jan31, 4)
+        )
     }
 
-    @Test fun yearly() {
+    @Test fun yearlyFromALeapDay() {
         val leap = LocalDate.of(2028, 2, 29)
-        assertEquals(LocalDate.of(2029, 2, 28), Recurrence.YEARLY.nextDue(leap, leap))
+        assertEquals(listOf(leap, LocalDate.of(2029, 2, 28), LocalDate.of(2032, 2, 29)), Recurrence.YEARLY.dates(leap).filterIndexed { i, _ -> i in setOf(0, 1, 4) }.take(3).toList())
+    }
+
+    @Test fun datesBetweenIsAfterAndUpToInclusive() =
+        assertEquals(
+            listOf(fri.plusWeeks(1), fri.plusWeeks(2)),
+            Recurrence.WEEKLY.datesBetween(fri, after = fri, until = fri.plusWeeks(2))
+        )
+
+    @Test fun nthDateCountsTheFirst() {
+        assertEquals(fri, Recurrence.WEEKLY.nthDate(fri, 1))
+        assertEquals(fri.plusWeeks(9), Recurrence.WEEKLY.nthDate(fri, 10))
     }
 
     @Test fun voicePhrases() {

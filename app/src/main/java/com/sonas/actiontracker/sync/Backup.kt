@@ -23,8 +23,10 @@ import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Processed
 import com.sonas.actiontracker.data.Recurrence
+import com.sonas.actiontracker.data.Series
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.data.STATUS_SKIPPED
 import com.sonas.actiontracker.data.STATUS_SUGGESTED
 import com.sonas.actiontracker.data.TimeOfDay
 import kotlinx.coroutines.Dispatchers
@@ -184,11 +186,17 @@ object Backup {
         dao.allItems().forEach { i ->
             items.put(
                 JSONObject()
-                    .put("title", i.title).put("notes", i.notes).put("person", i.person)
+                    .put("id", i.id).put("title", i.title).put("notes", i.notes).put("person", i.person)
                     .put("context", i.context).put("dueDate", i.dueDate).put("status", i.status)
                     .put("source", i.source).put("createdAt", i.createdAt).put("body", i.body)
                     .put("timeOfDay", i.timeOfDay).put("recurrence", i.recurrence)
-                    .apply { i.completedAt?.let { put("completedAt", it) } }
+                    .apply {
+                        i.completedAt?.let { put("completedAt", it) }
+                        i.seriesId?.let { put("seriesId", it) }
+                        i.seriesStart?.let { put("seriesStart", it) }
+                        i.endDate?.let { put("endDate", it) }
+                        i.endCount?.let { put("endCount", it) }
+                    }
             )
         }
         val processed = JSONArray()
@@ -204,8 +212,12 @@ object Backup {
      * app version are ignored, and a row that can't be read is skipped, not fatal.
      */
     private suspend fun import(context: Context, root: JSONObject): Int {
+        // Ids are kept so series links survive; a repeated or missing id just gets a new one.
         val items = (root.optJSONArray("items") ?: JSONArray()).let { arr ->
             (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(::itemFrom) }
+        }.let { list ->
+            val seen = HashSet<Long>()
+            list.map { if (it.id == 0L || seen.add(it.id)) it else it.copy(id = 0) }
         }
         val processed = (root.optJSONArray("processed") ?: JSONArray()).let { arr ->
             (0 until arr.length()).mapNotNull { n ->
@@ -219,8 +231,11 @@ object Backup {
         db.withTransaction {
             dao.deleteAllItems()
             dao.deleteAllProcessed()
-            items.forEach { dao.insert(it) }
+            // Rows with their own id first, so a new id handed out never takes one of theirs.
+            items.sortedBy { it.id == 0L }.forEach { dao.insert(it) }
             processed.forEach { dao.markProcessed(it) }
+            // Backups from before series (v5) hold one open row per repeating action; fill them ahead.
+            Series.topUpAll(db)
         }
         return items.size
     }
@@ -228,7 +243,7 @@ object Backup {
     private fun itemFrom(o: JSONObject): Item? {
         val title = o.optString("title").takeIf { it.isNotBlank() } ?: return null
         val ctx = o.optString("context", "Work")
-        val status = o.optString("status").takeIf { it in setOf(STATUS_SUGGESTED, STATUS_OPEN, STATUS_DONE) } ?: STATUS_OPEN
+        val status = o.optString("status").takeIf { it in setOf(STATUS_SUGGESTED, STATUS_OPEN, STATUS_DONE, STATUS_SKIPPED) } ?: STATUS_OPEN
         val time = o.optString("timeOfDay").takeIf { name -> TimeOfDay.entries.any { it.name == name } }
         return Item(
             title = title, notes = o.optString("notes"),
@@ -239,9 +254,16 @@ object Backup {
             body = o.optString("body"),
             completedAt = if (o.has("completedAt") && !o.isNull("completedAt")) o.optLong("completedAt") else null,
             timeOfDay = time ?: TimeOfDay.defaultFor(ctx).name,
-            recurrence = Recurrence.of(o.optString("recurrence")).name
+            recurrence = Recurrence.of(o.optString("recurrence")).name,
+            id = o.optLong("id", 0L).coerceAtLeast(0L),
+            seriesId = o.optLongOrNull("seriesId"),
+            seriesStart = o.optLongOrNull("seriesStart"),
+            endDate = o.optLongOrNull("endDate"),
+            endCount = o.optLongOrNull("endCount")?.toInt()
         )
     }
+
+    private fun JSONObject.optLongOrNull(key: String): Long? = if (has(key) && !isNull(key)) optLong(key) else null
 
     // ------------------------------------------------------------ crypto
 

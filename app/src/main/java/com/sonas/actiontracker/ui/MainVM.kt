@@ -10,6 +10,9 @@ import androidx.lifecycle.viewModelScope
 import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.data.Series
+import com.sonas.actiontracker.data.SeriesScope
+import com.sonas.actiontracker.data.Snapshot
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.sync.Backup
@@ -35,35 +38,46 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         private set
     var message by mutableStateOf<String?>(null)
 
+    // Repeating actions are kept three months ahead; this adds whatever came into range since the last run.
+    init {
+        viewModelScope.launch {
+            Series.topUpAll(db)
+            runCatching { DueWidget.refresh(getApplication()) }
+        }
+    }
+
     /** Confirms a suggestion: it becomes a regular open action. */
-    fun confirm(item: Item) = write { dao.update(item.copy(status = STATUS_OPEN)) }
+    fun confirm(item: Item) = write {
+        dao.update(item.copy(status = STATUS_OPEN))
+        Series.topUpAll(db)
+    }
 
     /** Confirms every suggestion currently on screen in one go. */
-    fun confirmAll(items: List<Item>) = write { items.forEach { dao.update(it.copy(status = STATUS_OPEN)) } }
+    fun confirmAll(items: List<Item>) = write {
+        items.forEach { dao.update(it.copy(status = STATUS_OPEN)) }
+        Series.topUpAll(db)
+    }
 
     /** Dismisses a suggestion. The source stays in `processed`, so it never comes back. */
     fun dismiss(item: Item) = write { dao.delete(item) }
 
-    fun save(item: Item) = write {
-        if (item.id == 0L) dao.insert(item) else dao.update(item)
-    }
+    /**
+     * Saves the edit sheet. A new repeating action is filled three months ahead; for an
+     * occurrence of a series, [scope] picks which occurrences change. Returns what Undo needs.
+     */
+    suspend fun save(original: Item, edited: Item, scope: SeriesScope = SeriesScope.THIS): Snapshot? =
+        Series.save(db, original, edited, scope).also { afterWrite() }
 
-    /** Ticks or un-ticks; a repeating action queues (or on un-tick drops) its next occurrence. */
     fun toggleDone(item: Item) = write {
         if (item.status == STATUS_DONE) Actions.reopen(db, item.id) else Actions.complete(db, item.id)
     }
 
-    /**
-     * Swipe-delete. For an open repeating action only this occurrence goes and the next one
-     * is queued; that one is returned so Undo can take it back out.
-     */
-    suspend fun delete(item: Item): Item? = Actions.deleteOccurrence(db, item).also { afterWrite() }
+    /** Swipe-delete; for an occurrence of a series, [scope] picks which occurrences go. Returns what Undo needs. */
+    suspend fun delete(item: Item, scope: SeriesScope = SeriesScope.THIS): Snapshot =
+        Series.delete(db, item, scope).also { afterWrite() }
 
-    /** Undo for a swipe-delete: puts the row back with its original id and drops the occurrence it queued. */
-    fun restore(item: Item, queued: Item? = null) = write {
-        queued?.let { dao.delete(it) }
-        dao.insert(item)
-    }
+    /** Undo for a delete or a scoped edit. */
+    fun undo(snapshot: Snapshot) = write { Series.undo(db, snapshot) }
 
     /**
      * Runs a database change, then redraws the home-screen widget so it never shows
