@@ -139,6 +139,7 @@ object Backup {
                     .put("title", i.title).put("notes", i.notes).put("person", i.person)
                     .put("context", i.context).put("dueDate", i.dueDate).put("status", i.status)
                     .put("source", i.source).put("createdAt", i.createdAt).put("body", i.body)
+                    .apply { i.completedAt?.let { put("completedAt", it) } }
             )
         }
         val processed = JSONArray()
@@ -162,7 +163,8 @@ object Backup {
                         person = o.optString("person", "Me"), context = o.optString("context", "Work"),
                         dueDate = o.getLong("dueDate"), status = o.getString("status"),
                         source = o.optString("source", "CUSTOM"), createdAt = o.optLong("createdAt"),
-                        body = o.optString("body")
+                        body = o.optString("body"),
+                        completedAt = if (o.has("completedAt")) o.getLong("completedAt") else null
                     )
                 )
             }

@@ -48,7 +48,9 @@ data class Item(
      * Full email text waiting for an on-device Gemini Nano title pass. Cleared once
      * the pass has run, so each suggestion is summarized at most once.
      */
-    val body: String = ""
+    val body: String = "",
+    /** When the action was ticked done (epoch millis); null while open, and for items done before v3. */
+    val completedAt: Long? = null
 ) {
     companion object {
         fun blank() = Item(
@@ -101,8 +103,8 @@ interface ItemDao {
     @Query("DELETE FROM processed")
     suspend fun deleteAllProcessed()
 
-    @Query("UPDATE items SET status = 'DONE' WHERE id = :id")
-    suspend fun markDone(id: Long)
+    @Query("UPDATE items SET status = 'DONE', completedAt = :at WHERE id = :id")
+    suspend fun markDone(id: Long, at: Long = System.currentTimeMillis())
 
     @Insert
     suspend fun insert(item: Item): Long
@@ -120,7 +122,7 @@ interface ItemDao {
     suspend fun markProcessed(p: Processed)
 }
 
-@Database(entities = [Item::class, Processed::class], version = 2, exportSchema = false)
+@Database(entities = [Item::class, Processed::class], version = 3, exportSchema = false)
 abstract class Db : RoomDatabase() {
     abstract fun dao(): ItemDao
 
@@ -137,13 +139,20 @@ abstract class Db : RoomDatabase() {
             val factory = SupportOpenHelperFactory(DbKey.passphrase(context))
             return Room.databaseBuilder(context, Db::class.java, "tracker.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE items ADD COLUMN body TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** Adds the completion time. Existing done items keep null and are counted by due date. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN completedAt INTEGER")
             }
         }
     }
