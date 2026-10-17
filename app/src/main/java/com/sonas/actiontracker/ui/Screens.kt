@@ -940,10 +940,7 @@ private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modif
     val time = if (group == Group.TIME) TimeOfDay.entries.firstOrNull { it.label == label } else null
     val accent = when {
         label == "Done" -> Fresh.TextDim
-        time == TimeOfDay.MORNING -> Fresh.Amber
-        time == TimeOfDay.AFTERNOON -> Fresh.Sky
-        time == TimeOfDay.EVENING -> Fresh.Coral
-        time == TimeOfDay.NIGHT -> Fresh.Indigo
+        time != null -> timeColor(time)
         group == Group.DATE && label == "Overdue" -> Fresh.Coral
         group == Group.DATE && label == "Today" -> Fresh.Sky
         group == Group.DATE && label == "Tomorrow" -> Fresh.Amber
@@ -1042,13 +1039,20 @@ private fun ActionRow(
     }
 }
 
+fun timeColor(time: TimeOfDay): Color = when (time) {
+    TimeOfDay.MORNING -> Fresh.Amber
+    TimeOfDay.AFTERNOON -> Fresh.Sky
+    TimeOfDay.EVENING -> Fresh.Coral
+    TimeOfDay.NIGHT -> Fresh.Indigo
+}
+
 /** Sunrise / sunset drawn as tinted icons; Afternoon and Night keep their sun and moon emoji. */
 @Composable
-private fun TimeIcon(time: TimeOfDay) {
+fun TimeIcon(time: TimeOfDay, size: Dp = 22.dp) {
     when (time) {
-        TimeOfDay.MORNING -> Icon(painterResource(R.drawable.ic_time_morning), time.label, tint = Fresh.Amber, modifier = Modifier.size(22.dp))
-        TimeOfDay.EVENING -> Icon(painterResource(R.drawable.ic_time_evening), time.label, tint = Fresh.Coral, modifier = Modifier.size(22.dp))
-        else -> Text(time.emoji, fontSize = 18.sp, modifier = Modifier.semantics { contentDescription = time.label })
+        TimeOfDay.MORNING -> Icon(painterResource(R.drawable.ic_time_morning), time.label, tint = timeColor(time), modifier = Modifier.size(size))
+        TimeOfDay.EVENING -> Icon(painterResource(R.drawable.ic_time_evening), time.label, tint = timeColor(time), modifier = Modifier.size(size))
+        else -> Text(time.emoji, fontSize = (size.value * 0.8f).sp, modifier = Modifier.semantics { contentDescription = time.label })
     }
 }
 

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.data.TimeOfDay
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -222,8 +223,16 @@ private fun CalendarTab(
             modifier = Modifier.padding(start = 4.dp)
         )
     }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        dayItems.forEach { DayRow(it, today, onToggle = { onToggle(it) }, onEdit = { onEdit(it) }) }
+    // The day's actions under Morning / Afternoon / Evening / Night, empty slots skipped.
+    dayItems.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap().forEach { (time, list) ->
+        Row(Modifier.padding(start = 4.dp, top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            TimeIcon(time, 16.dp)
+            Spacer(Modifier.width(6.dp))
+            Text(time.label.uppercase(), style = MaterialTheme.typography.labelSmall, color = timeColor(time))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            list.forEach { DayRow(it, today, onToggle = { onToggle(it) }, onEdit = { onEdit(it) }) }
+        }
     }
 }
 
@@ -347,6 +356,8 @@ private class Stats(
     val lastWeek: Int,
     val backlog: Int,
     val aging: List<Int>,
+    /** This month's (done, total) per time of day, Morning first. */
+    val byTime: List<Triple<TimeOfDay, Int, Int>>,
     /** Completions per day for the last [CHART_DAYS] days, oldest first. */
     val daily: List<Pair<Long, Int>>
 )
@@ -368,6 +379,10 @@ private fun stats(actions: List<Item>, month: YearMonth): Stats {
         lastWeek = (7..13).sumOf { perDay[today - it] ?: 0 },
         backlog = overdue.size,
         aging = listOf(overdue.count { it <= 3 }, overdue.count { it in 4..7 }, overdue.count { it >= 8 }),
+        byTime = TimeOfDay.entries.map { t ->
+            val slot = inMonth.filter { TimeOfDay.of(it.timeOfDay) == t }
+            Triple(t, slot.count { it.status == STATUS_DONE }, slot.size)
+        },
         daily = (CHART_DAYS - 1 downTo 0).map { (today - it) to (perDay[today - it] ?: 0) }
     )
 }
@@ -425,8 +440,35 @@ private fun StatsTab(actions: List<Item>, month: YearMonth) {
         )
     }
 
+    SectionLabel("By time of day, this month")
+    TimeBreakdown(s.byTime)
+
     SectionLabel("Backlog by age")
     BacklogAging(s.aging)
+}
+
+/** One line per time of day: icon, label, done/total and a thin bar of the done share. */
+@Composable
+private fun TimeBreakdown(rows: List<Triple<TimeOfDay, Int, Int>>) {
+    Column(
+        Modifier.fillMaxWidth().glass(CARD).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        rows.forEach { (time, done, total) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) { TimeIcon(time, 18.dp) }
+                Spacer(Modifier.width(8.dp))
+                Text(time.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(76.dp))
+                Box(Modifier.weight(1f).height(6.dp).clip(PILL_SHAPE).background(Fresh.Rim)) {
+                    if (total > 0 && done > 0) {
+                        Box(Modifier.fillMaxWidth(done.toFloat() / total).fillMaxHeight().clip(PILL_SHAPE).background(timeColor(time)))
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Text("$done/$total", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim, modifier = Modifier.width(40.dp))
+            }
+        }
+    }
 }
 
 @Composable
