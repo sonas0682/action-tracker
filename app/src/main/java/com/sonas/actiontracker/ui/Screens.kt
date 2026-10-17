@@ -22,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -117,6 +118,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -141,6 +143,8 @@ import com.sonas.actiontracker.sync.VoiceDraft
 import com.sonas.actiontracker.R
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Recurrence
+import com.sonas.actiontracker.data.SeriesScope
+import com.sonas.actiontracker.data.Snapshot
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
@@ -304,21 +308,42 @@ fun AppScreen(
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val deleteWithUndo: (Item) -> Unit = { item ->
+    val withUndo: (String, Snapshot?) -> Unit = { text, snapshot ->
         scope.launch {
-            // A repeating action only loses this occurrence; the series moves on to the next date.
-            val queued = vm.delete(item)
             snackbar.currentSnackbarData?.dismiss()
-            val result = snackbar.showSnackbar(
-                queued?.let { "Skipped \"${item.title}\"  ·  next ${shortDue(it.dueDate)}" }
-                    ?: "Deleted \"${item.title}\"",
-                actionLabel = "Undo", duration = SnackbarDuration.Short
+            if (snapshot == null) return@launch
+            val result = snackbar.showSnackbar(text, actionLabel = "Undo", duration = SnackbarDuration.Short)
+            if (result == SnackbarResult.ActionPerformed) vm.undo(snapshot)
+        }
+    }
+    // A repeating action asks which occurrences first (this one / following / all).
+    var pendingDelete by remember { mutableStateOf<Item?>(null) }
+    var pendingSave by remember { mutableStateOf<Pair<Item, Item>?>(null) }
+    val deleteNow: (Item, SeriesScope) -> Unit = { item, which ->
+        scope.launch {
+            val snapshot = vm.delete(item, which)
+            withUndo(
+                when {
+                    item.seriesId == null -> "Deleted \"${item.title}\""
+                    which == SeriesScope.THIS -> "Deleted this \"${item.title}\""
+                    which == SeriesScope.FOLLOWING -> "Stopped \"${item.title}\" from ${shortDue(item.dueDate).lowercase()}"
+                    else -> "Deleted every \"${item.title}\""
+                },
+                snapshot
             )
-            if (result == SnackbarResult.ActionPerformed) vm.restore(item, queued)
+        }
+    }
+    val deleteWithUndo: (Item) -> Unit = { item ->
+        if (item.seriesId != null) pendingDelete = item else deleteNow(item, SeriesScope.THIS)
+    }
+    val saveNow: (Item, Item, SeriesScope) -> Unit = { original, edited, which ->
+        scope.launch {
+            val snapshot = vm.save(original, edited, which)
+            if (original.seriesId != null) withUndo("Updated \"${edited.title}\"", snapshot)
         }
     }
     vm.message?.let { lastMessage = it }
-    val open = actions.filter { it.status == STATUS_OPEN }
+    val open = actions.filter { it.status == STATUS_OPEN && !it.isUpcomingRepeat() }
 
     AuroraBackground {
         if (insights) {
@@ -411,7 +436,32 @@ fun AppScreen(
             contexts = contexts,
             voice = voiceDraft,
             onDismiss = { editing = null; voiceDraft = null },
-            onSave = { vm.save(it); editing = null; voiceDraft = null }
+            onSave = { edited ->
+                if (item.seriesId != null && edited != item) pendingSave = item to edited
+                else saveNow(item, edited, SeriesScope.THIS)
+                editing = null; voiceDraft = null
+            }
+        )
+    }
+
+    pendingDelete?.let { item ->
+        ScopeDialog(
+            title = "Delete repeating action",
+            scopes = SeriesScope.entries,
+            onPick = { which -> pendingDelete = null; deleteNow(item, which) },
+            onDismiss = { pendingDelete = null }
+        )
+    }
+
+    pendingSave?.let { (original, edited) ->
+        ScopeDialog(
+            title = "Change repeating action",
+            // Moving one date is fine; a new repeat or end rule only makes sense from here on.
+            scopes = if (original.recurrence != edited.recurrence || original.endCount != edited.endCount ||
+                original.endDate != edited.endDate
+            ) listOf(SeriesScope.FOLLOWING, SeriesScope.ALL) else SeriesScope.entries,
+            onPick = { which -> pendingSave = null; saveNow(original, edited, which) },
+            onDismiss = { pendingSave = null }
         )
     }
 
@@ -959,8 +1009,10 @@ private fun ActionsList(
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
 ) {
-    val open = actions.filter { it.status == STATUS_OPEN }
+    // Repeats more than a week out are folded under "Upcoming" so the list stays about now.
+    val (upcoming, open) = actions.filter { it.status == STATUS_OPEN }.partition { it.isUpcomingRepeat() }
     val done = actions.filter { it.status == STATUS_DONE }
+    var showUpcoming by rememberSaveable { mutableStateOf(false) }
     val grouped: List<Pair<String, List<Item>>> = when (group) {
         Group.TIME -> open.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap()
             .map { (time, list) -> time.label to list }
@@ -972,7 +1024,8 @@ private fun ActionsList(
     val sections = grouped.map { (label, list) ->
         Section("h-$label", label, list.sortedBy { TimeOfDay.of(it.timeOfDay).ordinal })
     } +
-        if (done.isNotEmpty()) listOf(Section("done-header", "Done", done)) else emptyList()
+        (if (upcoming.isNotEmpty()) listOf(Section(UPCOMING_KEY, "Upcoming", if (showUpcoming) upcoming else emptyList())) else emptyList()) +
+        (if (done.isNotEmpty()) listOf(Section("done-header", "Done", done)) else emptyList())
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -993,11 +1046,19 @@ private fun ActionsList(
         }
         sections.forEach { section ->
             item(key = section.key) {
-                GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
+                if (section.key == UPCOMING_KEY) {
+                    GroupHeader(
+                        section.label, upcoming.size, group,
+                        Modifier.animateItem().clickable { showUpcoming = !showUpcoming },
+                        trailing = if (showUpcoming) "Hide" else "Show"
+                    )
+                } else {
+                    GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
+                }
             }
             items(section.items, key = { it.id }) { item ->
                 ActionRow(
-                    item, group,
+                    item, if (section.key == UPCOMING_KEY) Group.TIME else group,
                     onToggle = { vm.toggleDone(item) },
                     onEdit = { onEdit(item) },
                     onDelete = { onDelete(item) },
@@ -1008,8 +1069,15 @@ private fun ActionsList(
     }
 }
 
+private const val UPCOMING_KEY = "upcoming-header"
+
+/** How many days ahead repeats show in the main sections; later ones go under "Upcoming". */
+private const val UPCOMING_AFTER_DAYS = 7
+
+private fun Item.isUpcomingRepeat(): Boolean = seriesId != null && dueDate > today() + UPCOMING_AFTER_DAYS
+
 @Composable
-private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modifier = Modifier) {
+private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modifier = Modifier, trailing: String? = null) {
     val time = if (group == Group.TIME) TimeOfDay.entries.firstOrNull { it.label == label } else null
     val accent = when {
         label == "Done" -> Fresh.TextDim
@@ -1029,6 +1097,10 @@ private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modif
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp), color = accent)
         Spacer(Modifier.width(8.dp))
         Text("$count", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
+        trailing?.let {
+            Spacer(Modifier.weight(1f))
+            Text(it, style = MaterialTheme.typography.labelMedium, color = Fresh.Teal, modifier = Modifier.padding(end = 4.dp))
+        }
     }
 }
 
@@ -1043,10 +1115,11 @@ private fun ActionRow(
 ) {
     val isDone = item.status == STATUS_DONE
     // Swipe either way past the threshold to delete; the list's animateItem() closes the gap.
+    // A repeating row springs back while the "which occurrences?" dialog asks.
     val swipe = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value != SwipeToDismissBoxValue.Settled) onDelete()
-            value != SwipeToDismissBoxValue.Settled
+            value != SwipeToDismissBoxValue.Settled && item.seriesId == null
         }
     )
     SwipeToDismissBox(
@@ -1107,7 +1180,7 @@ private fun ActionRow(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            if (Recurrence.of(item.recurrence) != Recurrence.NONE) {
+            if (item.seriesId != null) {
                 Icon(
                     painterResource(R.drawable.ic_repeat), "Repeats ${Recurrence.of(item.recurrence).label.lowercase()}",
                     tint = Fresh.TextDim, modifier = Modifier.size(16.dp)
@@ -1191,7 +1264,12 @@ private fun EditSheet(
     var pickedTime by remember { mutableStateOf(TimeOfDay.of(item.timeOfDay)) }
     val time = if (timePicked) pickedTime else TimeOfDay.defaultFor(context)
     var repeat by remember { mutableStateOf(Recurrence.of(item.recurrence)) }
+    // Ends: never, on a date, or after a number of occurrences (the first counts).
+    var endDate by remember { mutableStateOf(if (item.endCount == null) item.endDate else null) }
+    var endCount by remember { mutableStateOf(item.endCount) }
     var pickDate by remember { mutableStateOf(false) }
+    var pickEndDate by remember { mutableStateOf(false) }
+    var pickEndCount by remember { mutableStateOf(false) }
     val t = today()
 
     // Never taller than 3/4 of the screen; on a wide (landscape) screen also no wider than 3/4.
@@ -1206,7 +1284,14 @@ private fun EditSheet(
                 context = context.trim().ifEmpty { "Work" },
                 dueDate = due,
                 timeOfDay = time.name,
-                recurrence = repeat.name
+                recurrence = repeat.name,
+                // An unchanged "after N times" keeps the end date worked out for it.
+                endDate = when {
+                    repeat == Recurrence.NONE -> null
+                    endCount != null -> if (endCount == item.endCount) item.endDate else null
+                    else -> endDate
+                },
+                endCount = if (repeat == Recurrence.NONE) null else endCount
             )
         )
     }
@@ -1278,9 +1363,50 @@ private fun EditSheet(
                         onPick = { i -> repeat = Recurrence.entries[i] },
                         modifier = Modifier.weight(1f)
                     )
+                    // Only for repeating actions, in the same row so the sheet doesn't grow.
+                    if (repeat != Recurrence.NONE) {
+                        PickerPill(
+                            label = "Ends",
+                            value = endCount?.let { "$it times" } ?: endDate?.let { shortDate(it) } ?: "Never",
+                            options = listOf("Never", "On a date…", "After a number of times…"),
+                            selected = when { endCount != null -> 2; endDate != null -> 1; else -> 0 },
+                            onPick = { i ->
+                                when (i) {
+                                    0 -> { endDate = null; endCount = null }
+                                    1 -> pickEndDate = true
+                                    else -> pickEndCount = true
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (pickEndDate) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = (endDate ?: (due + 30)) * DAY_MS)
+        DatePickerDialog(
+            onDismissRequest = { pickEndDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { endDate = maxOf(Math.floorDiv(it, DAY_MS), due); endCount = null }
+                    pickEndDate = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { pickEndDate = false }) { Text("Cancel") } }
+        ) {
+            DatePicker(state = state, title = { Text("Last day", Modifier.padding(start = 24.dp, top = 16.dp)) })
+        }
+    }
+
+    if (pickEndCount) {
+        EndCountDialog(
+            initial = endCount ?: 10,
+            onDismiss = { pickEndCount = false },
+            onConfirm = { endCount = it; endDate = null; pickEndCount = false }
+        )
     }
 
     if (pickDate) {
@@ -1298,6 +1424,52 @@ private fun EditSheet(
             DatePicker(state = state)
         }
     }
+}
+
+/** "Dec 31", with the year only when it isn't this year. */
+private fun shortDate(epochDay: Long): String {
+    val d = LocalDate.ofEpochDay(epochDay)
+    return d.format(DateTimeFormatter.ofPattern(if (d.year == LocalDate.now().year) "MMM d" else "MMM d, yyyy"))
+}
+
+/** "Ends after N times": how many occurrences in all, the first one included. */
+@Composable
+private fun EndCountDialog(initial: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var text by remember { mutableStateOf(initial.toString()) }
+    val n = text.toIntOrNull()?.takeIf { it in 1..999 }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ends after") },
+        text = {
+            OutlinedTextField(
+                value = text, onValueChange = { v -> text = v.filter { it.isDigit() }.take(3) },
+                label = { Text("Times, this one included") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        },
+        confirmButton = { TextButton(enabled = n != null, onClick = { n?.let(onConfirm) }) { Text("OK") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Asks which occurrences of a repeating action an edit or delete applies to. */
+@Composable
+private fun ScopeDialog(title: String, scopes: List<SeriesScope>, onPick: (SeriesScope) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                scopes.forEach { scope ->
+                    TextButton(onClick = { onPick(scope) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(scope.label, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) } }
+    )
 }
 
 /** "Weekly on Fri", "Monthly on the 17th": the anchor comes from the due date. */

@@ -31,6 +31,8 @@ import javax.crypto.spec.GCMParameterSpec
 const val STATUS_SUGGESTED = "SUGGESTED"
 const val STATUS_OPEN = "OPEN"
 const val STATUS_DONE = "DONE"
+/** One occurrence of a repeating action deleted on its own; kept hidden so the series doesn't re-add that date. */
+const val STATUS_SKIPPED = "SKIPPED"
 
 /** When in the day an action is meant to happen; stored by name in [Item.timeOfDay]. */
 enum class TimeOfDay(val label: String, val emoji: String) {
@@ -71,7 +73,15 @@ data class Item(
     val timeOfDay: String = TimeOfDay.defaultFor(context).name,
     /** A [Recurrence] name; NONE for one-off actions. */
     @ColumnInfo(defaultValue = "NONE")
-    val recurrence: String = Recurrence.NONE.name
+    val recurrence: String = Recurrence.NONE.name,
+    /** Series this occurrence belongs to (the id of its first row); null for one-off actions. */
+    val seriesId: Long? = null,
+    /** First due date of the series (epoch day). Dates are counted from it, so "monthly on the 31st" never drifts. */
+    val seriesStart: Long? = null,
+    /** Last day an occurrence may fall on (epoch day): "Ends on" directly, or worked out from "Ends after N times". */
+    val endDate: Long? = null,
+    /** "Ends after N times" (the first occurrence counts); null for "Never" or "On a date". */
+    val endCount: Int? = null
 ) {
     companion object {
         fun blank() = Item(
@@ -115,9 +125,28 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE id = :id")
     suspend fun byId(id: Long): Item?
 
-    /** Removes the open occurrence a repeating action queued when it was ticked done at [completedAt]. */
-    @Query("DELETE FROM items WHERE status = 'OPEN' AND recurrence != 'NONE' AND title = :title AND createdAt = :completedAt")
-    suspend fun deleteQueuedOccurrence(title: String, completedAt: Long)
+    /** Every row of a repeating series, skipped ones included, earliest first. */
+    @Query("SELECT * FROM items WHERE seriesId = :seriesId ORDER BY dueDate, id")
+    suspend fun series(seriesId: Long): List<Item>
+
+    @Query("SELECT DISTINCT seriesId FROM items WHERE seriesId IS NOT NULL")
+    suspend fun seriesIds(): List<Long>
+
+    /**
+     * Turns open repeating actions from before series existed (v5 and v5 backups) into series of
+     * their own, and makes their done rows plain history.
+     */
+    @Query("UPDATE items SET seriesId = id, seriesStart = dueDate WHERE recurrence != 'NONE' AND status = 'OPEN' AND seriesId IS NULL")
+    suspend fun adoptLegacySeries()
+
+    @Query("UPDATE items SET recurrence = 'NONE' WHERE recurrence != 'NONE' AND seriesId IS NULL AND status = 'DONE'")
+    suspend fun clearLooseRecurrence()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(items: List<Item>)
+
+    @Query("DELETE FROM items WHERE seriesId IN (:seriesIds)")
+    suspend fun deleteSeries(seriesIds: Collection<Long>)
 
     @Query("SELECT * FROM items")
     suspend fun allItems(): List<Item>
@@ -154,7 +183,7 @@ interface ItemDao {
 }
 
 /** Room schema version; also written into Drive backups so restores know where they came from. */
-const val DB_VERSION = 5
+const val DB_VERSION = 6
 
 @Database(entities = [Item::class, Processed::class], version = DB_VERSION, exportSchema = false)
 abstract class Db : RoomDatabase() {
@@ -173,7 +202,7 @@ abstract class Db : RoomDatabase() {
             val factory = SupportOpenHelperFactory(DbKey.passphrase(context))
             return Room.databaseBuilder(context, Db::class.java, "tracker.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(*MIGRATIONS)
                 .build()
         }
 
@@ -190,6 +219,11 @@ abstract class Db : RoomDatabase() {
             }
         }
 
+        /** Every upgrade step, oldest first; also used by the upgrade tests. */
+        internal val MIGRATIONS: Array<Migration> by lazy {
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        }
+
         /** Adds the time of day, backfilled with the same work-context rule new actions use. */
         internal val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -203,6 +237,22 @@ abstract class Db : RoomDatabase() {
                 afternoon.forEach {
                     db.execSQL("UPDATE items SET timeOfDay = 'AFTERNOON' WHERE id = ?", arrayOf<Any>(it))
                 }
+            }
+        }
+
+        /**
+         * Series and end rules. Each open repeating action becomes its own series (its next
+         * occurrences are filled in at the next app start); done rows of the old
+         * one-at-a-time repeats stay as plain history.
+         */
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN seriesId INTEGER")
+                db.execSQL("ALTER TABLE items ADD COLUMN seriesStart INTEGER")
+                db.execSQL("ALTER TABLE items ADD COLUMN endDate INTEGER")
+                db.execSQL("ALTER TABLE items ADD COLUMN endCount INTEGER")
+                db.execSQL("UPDATE items SET seriesId = id, seriesStart = dueDate WHERE recurrence != 'NONE' AND status = 'OPEN'")
+                db.execSQL("UPDATE items SET recurrence = 'NONE' WHERE recurrence != 'NONE' AND seriesId IS NULL AND status = 'DONE'")
             }
         }
 
