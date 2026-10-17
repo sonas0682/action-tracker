@@ -85,6 +85,10 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE status = 'SUGGESTED' AND body != ''")
     suspend fun awaitingSmartTitle(): List<Item>
 
+    /** Gmail suggestions and open actions that predate the email summary. */
+    @Query("SELECT * FROM items WHERE source = 'GMAIL' AND status IN ('SUGGESTED', 'OPEN') AND body = '' AND notes NOT LIKE 'Summary:%'")
+    suspend fun awaitingSummary(): List<Item>
+
     @Query("SELECT * FROM items")
     suspend fun allItems(): List<Item>
 

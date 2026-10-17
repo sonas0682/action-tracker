@@ -81,6 +81,56 @@ object SmartTitles {
         }
     }
 
+    private const val PREFS = "smart_titles"
+    private const val BACKFILL_DONE = "summary_backfill_done"
+
+    /**
+     * One-time pass that adds the email summary to Gmail suggestions and open actions
+     * created before summaries existed. Their email text was never kept, so it is fetched
+     * again from Gmail. Titles are left alone. Returns how many items got a summary.
+     */
+    suspend fun backfill(context: Context, token: String): Int = lock.withLock {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(BACKFILL_DONE, false)) return@withLock 0
+        withContext(Dispatchers.IO) {
+            val dao = Db.get(context).dao()
+            val pending = dao.awaitingSummary()
+            if (pending.isEmpty()) {
+                prefs.edit().putBoolean(BACKFILL_DONE, true).apply()
+                return@withContext 0
+            }
+            val bullets = client(context, SummarizerOptions.OutputType.THREE_BULLETS)
+            try {
+                val status = bullets.checkFeatureStatus().get()
+                if (status == FeatureStatus.UNAVAILABLE || status == FeatureStatus.DOWNLOADING) return@withContext 0
+
+                var done = 0
+                for (item in pending) {
+                    val lines = item.notes.lines()
+                    val subject = lines.firstOrNull { it.startsWith("Subject: ") }?.removePrefix("Subject: ") ?: item.title
+                    val from = lines.firstOrNull { it.startsWith("From: ") }?.removePrefix("From: ").orEmpty()
+                    val body = runCatching {
+                        Gmail.find(subject, from, item.createdAt, token)?.let { Gmail.body(it, token) }
+                    }.getOrNull().orEmpty().take(MAX_INPUT_CHARS)
+                    if (body.length < MIN_INPUT_CHARS) continue
+                    val points = runCatching {
+                        bullets.runInference(SummarizationRequest.builder(body).build()).get().summary
+                    }.getOrNull() ?: return@withContext done // e.g. app went to background; retry later
+                    val list = bulletList(points)
+                    if (list.isEmpty()) continue
+                    dao.update(item.copy(notes = "Summary:\n$list\n\n${item.notes}".trim().take(MAX_NOTES_CHARS)))
+                    done++
+                }
+                prefs.edit().putBoolean(BACKFILL_DONE, true).apply()
+                done
+            } catch (e: Exception) {
+                0
+            } finally {
+                bullets.close()
+            }
+        }
+    }
+
     private fun client(context: Context, output: Int) = Summarization.getClient(
         SummarizerOptions.builder(context)
             .setInputType(SummarizerOptions.InputType.ARTICLE)
