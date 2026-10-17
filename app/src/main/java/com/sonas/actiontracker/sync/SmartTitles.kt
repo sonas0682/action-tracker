@@ -13,8 +13,9 @@ import kotlinx.coroutines.withContext
 
 /**
  * On-device Gemini Nano (ML Kit GenAI Summarization) pass that rewrites Gmail
- * suggestions into a clean one-line title. The rules still decide what counts as
- * an action; Nano only improves the wording. Nothing leaves the phone.
+ * suggestions into a clean one-line title and puts a short bullet summary of the
+ * email in the notes. The rules still decide what counts as an action and set the
+ * due date, person and context; Nano only improves the wording. Nothing leaves the phone.
  *
  * Android only allows Nano while the app is in the foreground, so this runs from
  * the app, never from background sync. Any failure leaves the rule-based title.
@@ -26,23 +27,19 @@ object SmartTitles {
     /** The summarizer rejects article input shorter than this. */
     private const val MIN_INPUT_CHARS = 400
     private const val MAX_TITLE_CHARS = 120
+    private const val MAX_NOTES_CHARS = 800
 
     private val lock = Mutex()
 
-    /** Retitles every suggestion still holding email text. Returns how many were retitled. */
+    /** Retitles and summarizes every suggestion still holding email text. Returns how many were done. */
     suspend fun run(context: Context): Int = lock.withLock {
         withContext(Dispatchers.IO) {
             val dao = Db.get(context).dao()
             val pending = dao.awaitingSmartTitle()
             if (pending.isEmpty()) return@withContext 0
 
-            val summarizer = Summarization.getClient(
-                SummarizerOptions.builder(context)
-                    .setInputType(SummarizerOptions.InputType.ARTICLE)
-                    .setOutputType(SummarizerOptions.OutputType.ONE_BULLET)
-                    .setLanguage(SummarizerOptions.Language.ENGLISH)
-                    .build()
-            )
+            val summarizer = client(context, SummarizerOptions.OutputType.ONE_BULLET)
+            val bullets = client(context, SummarizerOptions.OutputType.THREE_BULLETS)
             try {
                 val status = summarizer.checkFeatureStatus().get()
                 // Not supported, or the model is still downloading: keep the text and try next time.
@@ -59,9 +56,18 @@ object SmartTitles {
                         summarizer.runInference(SummarizationRequest.builder(item.body).build()).get().summary
                     }.getOrNull() ?: return@withContext done // e.g. app went to background; retry later
                     val title = clean(summary)
+                    // A missing summary is fine: the title still improves and the notes keep the subject.
+                    val points = runCatching {
+                        bullets.runInference(SummarizationRequest.builder(item.body).build()).get().summary
+                    }.getOrNull()?.let(::bulletList).orEmpty()
+                    val notes = buildString {
+                        if (points.isNotEmpty()) append("Summary:\n").append(points).append("\n\n")
+                        if (title.isNotEmpty()) append("Subject: ${item.title}\n")
+                        append(item.notes)
+                    }.trim().take(MAX_NOTES_CHARS)
                     dao.update(
-                        if (title.isEmpty()) item.copy(body = "")
-                        else item.copy(title = title, notes = "Subject: ${item.title}\n${item.notes}".take(400), body = "")
+                        if (title.isEmpty()) item.copy(notes = notes, body = "")
+                        else item.copy(title = title, notes = notes, body = "")
                     )
                     done++
                 }
@@ -70,12 +76,26 @@ object SmartTitles {
                 0
             } finally {
                 summarizer.close()
+                bullets.close()
             }
         }
     }
 
+    private fun client(context: Context, output: Int) = Summarization.getClient(
+        SummarizerOptions.builder(context)
+            .setInputType(SummarizerOptions.InputType.ARTICLE)
+            .setOutputType(output)
+            .setLanguage(SummarizerOptions.Language.ENGLISH)
+            .build()
+    )
+
+    private fun stripBullet(line: String) =
+        line.trim().removePrefix("*").removePrefix("-").removePrefix("•").trim()
+
     private fun clean(summary: String): String =
-        summary.lines().firstOrNull { it.isNotBlank() }.orEmpty()
-            .trim().removePrefix("*").removePrefix("-").removePrefix("•").trim()
-            .take(MAX_TITLE_CHARS)
+        stripBullet(summary.lines().firstOrNull { it.isNotBlank() }.orEmpty()).take(MAX_TITLE_CHARS)
+
+    /** Normalizes Nano's bullets to "• point" lines. */
+    private fun bulletList(summary: String): String =
+        summary.lines().map(::stripBullet).filter { it.isNotEmpty() }.joinToString("\n") { "• $it" }
 }
