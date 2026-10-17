@@ -47,7 +47,13 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleDone(item: Item) = write {
-        dao.update(item.copy(status = if (item.status == STATUS_DONE) STATUS_OPEN else STATUS_DONE))
+        val done = item.status != STATUS_DONE
+        dao.update(
+            item.copy(
+                status = if (done) STATUS_DONE else STATUS_OPEN,
+                completedAt = if (done) System.currentTimeMillis() else null
+            )
+        )
     }
 
     fun delete(item: Item) = write { dao.delete(item) }

@@ -273,6 +273,7 @@ fun AppScreen(
     val actions by vm.actions.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
     var group by remember { mutableStateOf(Group.DATE) }
+    var insights by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
     var listening by remember { mutableStateOf(false) }
@@ -306,51 +307,61 @@ fun AppScreen(
     val open = actions.filter { it.status == STATUS_OPEN }
 
     AuroraBackground {
-        // Top + side insets keep the bar clear of the status bar and the camera cutout in landscape.
-        Column(
-            Modifier.fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-        ) {
-            TopBar(
-                tab = tab,
-                onTab = { tab = it },
-                counts = listOf(open.size, suggested.size),
-                open = open,
-                group = group,
-                onGroup = { group = it },
-                syncing = vm.syncing,
-                onSync = onSync,
-                menu = {
-                    MoreMenu(
-                        lockEnabled, onLockChange, reminders, onRemindersChange,
-                        onPickTime = { pickingTime = true }, onOpenBackup = onOpenBackup
-                    )
-                }
+        if (insights) {
+            InsightsScreen(
+                actions,
+                onClose = { insights = false },
+                onToggle = { vm.toggleDone(it) },
+                onEdit = { editing = it }
             )
-            AnimatedVisibility(
-                visible = vm.message != null,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+        } else {
+            // Top + side insets keep the bar clear of the status bar and the camera cutout in landscape.
+            Column(
+                Modifier.fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             ) {
-                MessageBanner(lastMessage, onClose = { vm.message = null })
-            }
-            PullToRefreshBox(
-                isRefreshing = vm.syncing,
-                onRefresh = onSync,
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            ) {
-                if (tab == TAB_ACTIONS) {
-                    ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
-                } else {
-                    SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
+                TopBar(
+                    tab = tab,
+                    onTab = { tab = it },
+                    counts = listOf(open.size, suggested.size),
+                    open = open,
+                    group = group,
+                    onGroup = { group = it },
+                    syncing = vm.syncing,
+                    onSync = onSync,
+                    onInsights = { insights = true },
+                    menu = {
+                        MoreMenu(
+                            lockEnabled, onLockChange, reminders, onRemindersChange,
+                            onPickTime = { pickingTime = true }, onOpenBackup = onOpenBackup
+                        )
+                    }
+                )
+                AnimatedVisibility(
+                    visible = vm.message != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    MessageBanner(lastMessage, onClose = { vm.message = null })
+                }
+                PullToRefreshBox(
+                    isRefreshing = vm.syncing,
+                    onRefresh = onSync,
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                ) {
+                    if (tab == TAB_ACTIONS) {
+                        ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
+                    } else {
+                        SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
+                    }
                 }
             }
+            NewActionFab(
+                onClick = { voiceDraft = null; editing = Item.blank() },
+                onLongClick = startListening,
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
+            )
         }
-        NewActionFab(
-            onClick = { voiceDraft = null; editing = Item.blank() },
-            onLongClick = startListening,
-            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
-        )
         SnackbarHost(
             snackbar,
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 92.dp, bottom = 16.dp)
@@ -414,6 +425,7 @@ private fun TopBar(
     onGroup: (Group) -> Unit,
     syncing: Boolean,
     onSync: () -> Unit,
+    onInsights: () -> Unit,
     menu: @Composable () -> Unit
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -431,6 +443,10 @@ private fun TopBar(
                 if (tab == TAB_ACTIONS) {
                     Spacer(Modifier.width(6.dp))
                     GroupMenu(group, onGroup)
+                }
+                Spacer(Modifier.width(6.dp))
+                GlassIconButton(onClick = onInsights) {
+                    Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(6.dp))
                 SyncButton(syncing, onSync)
@@ -506,7 +522,7 @@ private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
 }
 
 @Composable
-private fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
+internal fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
     Box(
         Modifier.size(36.dp).glass(CircleShape).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
@@ -574,7 +590,7 @@ private fun MoreMenu(
 
 /** Glass capsule with a gradient pill that slides between the two tabs. */
 @Composable
-private fun TabSwitcher(
+internal fun TabSwitcher(
     tab: Int,
     labels: List<String>,
     counts: List<Int>,
