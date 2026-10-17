@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -72,7 +73,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -126,6 +127,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1192,101 +1194,91 @@ private fun EditSheet(
     var pickDate by remember { mutableStateOf(false) }
     val t = today()
 
+    // Never taller than 3/4 of the screen; on a wide (landscape) screen also no wider than 3/4.
+    val screen = LocalConfiguration.current
+    val maxHeight = (screen.screenHeightDp * 0.75f).dp
+    val maxWidth = if (screen.screenWidthDp > screen.screenHeightDp) (screen.screenWidthDp * 0.75f).dp else BottomSheetDefaults.SheetMaxWidth
+    val save = {
+        onSave(
+            item.copy(
+                title = title.trim(),
+                person = person.trim().ifEmpty { "Me" },
+                context = context.trim().ifEmpty { "Work" },
+                dueDate = due,
+                timeOfDay = time.name,
+                recurrence = repeat.name
+            )
+        )
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        sheetMaxWidth = maxWidth,
         containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                if (voice != null) "Voice draft" else if (item.id == 0L) "New action" else "Edit action",
-                style = MaterialTheme.typography.headlineMedium.copy(brush = Fresh.accentHorizontal)
-            )
-            voice?.let { VoiceNote(it) }
-            OutlinedTextField(
-                value = title, onValueChange = { title = it },
-                label = { Text("What needs doing?") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
-            )
-
-            SheetLabel("Person")
-            OutlinedTextField(
-                value = person, onValueChange = { person = it },
-                label = { Text("Person") }, singleLine = true,
-                leadingIcon = { Icon(Icons.Rounded.Person, null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
-            )
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                people.forEach { FilterChip(selected = person.trim().equals(it, ignoreCase = true), onClick = { person = it }, label = { Text(it) }) }
-            }
-
-            SheetLabel("Context")
-            OutlinedTextField(
-                value = context, onValueChange = { context = it },
-                label = { Text("Context") }, singleLine = true,
-                leadingIcon = { Icon(contextIcon(context), null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
-            )
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                contexts.forEach { FilterChip(selected = context.trim().equals(it, ignoreCase = true), onClick = { context = it }, label = { Text(it) }) }
-            }
-
-            SheetLabel("Due")
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = due == t, onClick = { due = t }, label = { Text("Today") })
-                FilterChip(selected = due == t + 1, onClick = { due = t + 1 }, label = { Text("Tomorrow") })
-                FilterChip(selected = due == t + 7, onClick = { due = t + 7 }, label = { Text("Next week") })
-                AssistChip(
-                    onClick = { pickDate = true },
-                    label = { Text(fullDate(due)) },
-                    leadingIcon = { Icon(Icons.Rounded.DateRange, null, Modifier.size(18.dp)) }
+        Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
+            // Save sits in the header so the keyboard can never cover it.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (voice != null) "Voice draft" else if (item.id == 0L) "New action" else "Edit action",
+                    style = MaterialTheme.typography.titleLarge.copy(brush = Fresh.accentHorizontal),
+                    modifier = Modifier.weight(1f)
                 )
+                TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
+                GradientButton("Save", Icons.Rounded.Check, enabled = title.isNotBlank(), onClick = save)
             }
+            Spacer(Modifier.height(8.dp))
+            Column(
+                Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                voice?.let { VoiceNote(it) }
+                OutlinedTextField(
+                    value = title, onValueChange = { title = it },
+                    label = { Text("What needs doing?") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                )
 
-            SheetLabel("Time of day")
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeOfDay.entries.forEach { slot ->
-                    FilterChip(
-                        selected = time == slot,
-                        onClick = { pickedTime = slot; timePicked = true },
-                        label = { Text(slot.label) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SavedValueField(
+                        value = person, onValueChange = { person = it }, label = "Person",
+                        icon = Icons.Rounded.Person, saved = people, modifier = Modifier.weight(1f)
+                    )
+                    SavedValueField(
+                        value = context, onValueChange = { context = it }, label = "Context",
+                        icon = contextIcon(context), saved = contexts, modifier = Modifier.weight(1f)
                     )
                 }
-            }
 
-            SheetLabel("Repeat")
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Recurrence.entries.forEach { r ->
-                    FilterChip(selected = repeat == r, onClick = { repeat = r }, label = { Text(repeatLabel(r, due)) })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PickerPill(
+                        label = "Due",
+                        value = when (due) { t -> "Today"; t + 1 -> "Tomorrow"; t + 7 -> "Next week"; else -> fullDate(due) },
+                        options = listOf("Today", "Tomorrow", "Next week", "Pick a date…"),
+                        selected = when (due) { t -> 0; t + 1 -> 1; t + 7 -> 2; else -> -1 },
+                        onPick = { i -> when (i) { 0 -> due = t; 1 -> due = t + 1; 2 -> due = t + 7; else -> pickDate = true } },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PickerPill(
+                        label = "Time",
+                        value = time.label,
+                        options = TimeOfDay.entries.map { it.label },
+                        selected = time.ordinal,
+                        onPick = { i -> pickedTime = TimeOfDay.entries[i]; timePicked = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PickerPill(
+                        label = "Repeat",
+                        value = repeat.label,
+                        options = Recurrence.entries.map { repeatLabel(it, due) },
+                        selected = repeat.ordinal,
+                        onPick = { i -> repeat = Recurrence.entries[i] },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-            }
-
-            Spacer(Modifier.height(4.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
-                Spacer(Modifier.weight(1f))
-                GradientButton(
-                    "Save", Icons.Rounded.Check,
-                    enabled = title.isNotBlank(),
-                    onClick = {
-                        onSave(
-                            item.copy(
-                                title = title.trim(),
-                                person = person.trim().ifEmpty { "Me" },
-                                context = context.trim().ifEmpty { "Work" },
-                                dueDate = due,
-                                timeOfDay = time.name,
-                                recurrence = repeat.name
-                            )
-                        )
-                    }
-                )
             }
         }
     }
@@ -1327,12 +1319,74 @@ private fun ordinal(n: Int): String = n.toString() + when {
     else -> "th"
 }
 
+/** Half-width text field with the previously used values as one scrolling chip row under it. */
 @Composable
-private fun SheetLabel(text: String) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = Fresh.Teal,
-        modifier = Modifier.padding(top = 4.dp)
-    )
+private fun SavedValueField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    icon: ImageVector,
+    saved: List<String>,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(
+            value = value, onValueChange = onValueChange,
+            label = { Text(label) }, singleLine = true,
+            leadingIcon = { Icon(icon, null, Modifier.size(20.dp)) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium
+        )
+        if (saved.isNotEmpty()) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                saved.forEach {
+                    FilterChip(
+                        selected = value.trim().equals(it, ignoreCase = true),
+                        onClick = { onValueChange(it) },
+                        label = { Text(it, maxLines = 1) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Compact labelled box that opens a dropdown of choices; three fit side by side. */
+@Composable
+private fun PickerPill(
+    label: String,
+    value: String,
+    options: List<String>,
+    selected: Int,
+    onPick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
+                .clickable { open = true }
+                .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+        ) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.Teal)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    value, style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                )
+                Icon(Icons.Rounded.ArrowDropDown, null, tint = Fresh.TextDim)
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEachIndexed { i, text ->
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = { open = false; onPick(i) },
+                    trailingIcon = { if (i == selected) Icon(Icons.Rounded.Check, null, tint = Fresh.Teal) }
+                )
+            }
+        }
+    }
 }
