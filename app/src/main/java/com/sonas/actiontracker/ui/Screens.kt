@@ -135,6 +135,7 @@ import com.sonas.actiontracker.sync.VoiceDraft
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Reminders
 import java.time.LocalDate
 import java.time.LocalTime
@@ -936,7 +937,7 @@ private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modif
         else -> Fresh.Indigo
     }
     Row(
-        modifier.fillMaxWidth().padding(start = 4.dp, top = 14.dp, bottom = 2.dp),
+        modifier.fillMaxWidth().padding(start = 4.dp, top = 24.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.width(18.dp).height(4.dp).clip(PILL).background(accent))
@@ -1075,6 +1076,10 @@ private fun EditSheet(
     var person by remember { mutableStateOf(item.person) }
     var context by remember { mutableStateOf(item.context) }
     var due by remember { mutableLongStateOf(item.dueDate) }
+    // New actions and voice drafts follow their context's default until a time chip is tapped.
+    var timePicked by remember { mutableStateOf(item.id != 0L) }
+    var pickedTime by remember { mutableStateOf(TimeOfDay.of(item.timeOfDay)) }
+    val time = if (timePicked) pickedTime else TimeOfDay.defaultFor(context)
     var pickDate by remember { mutableStateOf(false) }
     val t = today()
 
@@ -1135,6 +1140,17 @@ private fun EditSheet(
                 )
             }
 
+            SheetLabel("Time of day")
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TimeOfDay.entries.forEach { slot ->
+                    FilterChip(
+                        selected = time == slot,
+                        onClick = { pickedTime = slot; timePicked = true },
+                        label = { Text(slot.label) }
+                    )
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
@@ -1148,7 +1164,8 @@ private fun EditSheet(
                                 title = title.trim(),
                                 person = person.trim().ifEmpty { "Me" },
                                 context = context.trim().ifEmpty { "Work" },
-                                dueDate = due
+                                dueDate = due,
+                                timeOfDay = time.name
                             )
                         )
                     }

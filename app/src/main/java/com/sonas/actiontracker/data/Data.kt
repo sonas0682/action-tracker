@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
@@ -31,6 +32,20 @@ const val STATUS_SUGGESTED = "SUGGESTED"
 const val STATUS_OPEN = "OPEN"
 const val STATUS_DONE = "DONE"
 
+/** When in the day an action is meant to happen; stored by name in [Item.timeOfDay]. */
+enum class TimeOfDay(val label: String) {
+    MORNING("Morning"), AFTERNOON("Afternoon"), EVENING("Evening"), NIGHT("Night");
+
+    companion object {
+        private val workContext = Regex("""(?i)\b(work|office)\b""")
+
+        /** Work contexts ("Work", "Office", "Work/Client") default to Afternoon, everything else to Evening. */
+        fun defaultFor(context: String): TimeOfDay = if (workContext.containsMatchIn(context)) AFTERNOON else EVENING
+
+        fun of(name: String): TimeOfDay = entries.firstOrNull { it.name == name } ?: EVENING
+    }
+}
+
 @Entity(tableName = "items")
 data class Item(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -50,7 +65,10 @@ data class Item(
      */
     val body: String = "",
     /** When the action was ticked done (epoch millis); null while open, and for items done before v3. */
-    val completedAt: Long? = null
+    val completedAt: Long? = null,
+    /** A [TimeOfDay] name; new actions take the default for their context until changed. */
+    @ColumnInfo(defaultValue = "EVENING")
+    val timeOfDay: String = TimeOfDay.defaultFor(context).name
 ) {
     companion object {
         fun blank() = Item(
@@ -122,7 +140,7 @@ interface ItemDao {
     suspend fun markProcessed(p: Processed)
 }
 
-@Database(entities = [Item::class, Processed::class], version = 3, exportSchema = false)
+@Database(entities = [Item::class, Processed::class], version = 4, exportSchema = false)
 abstract class Db : RoomDatabase() {
     abstract fun dao(): ItemDao
 
@@ -139,7 +157,7 @@ abstract class Db : RoomDatabase() {
             val factory = SupportOpenHelperFactory(DbKey.passphrase(context))
             return Room.databaseBuilder(context, Db::class.java, "tracker.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
         }
 
@@ -153,6 +171,22 @@ abstract class Db : RoomDatabase() {
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE items ADD COLUMN completedAt INTEGER")
+            }
+        }
+
+        /** Adds the time of day, backfilled with the same work-context rule new actions use. */
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN timeOfDay TEXT NOT NULL DEFAULT 'EVENING'")
+                val afternoon = mutableListOf<Long>()
+                db.query("SELECT id, context FROM items").use { c ->
+                    while (c.moveToNext()) {
+                        if (TimeOfDay.defaultFor(c.getString(1) ?: "") == TimeOfDay.AFTERNOON) afternoon += c.getLong(0)
+                    }
+                }
+                afternoon.forEach {
+                    db.execSQL("UPDATE items SET timeOfDay = 'AFTERNOON' WHERE id = ?", arrayOf<Any>(it))
+                }
             }
         }
     }
