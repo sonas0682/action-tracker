@@ -134,6 +134,12 @@ private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
 
+/** Every person/context used so far, most recent first, then the built-in defaults; deduped ignoring case. */
+private fun recentValues(items: List<Item>, defaults: List<String>, pick: (Item) -> String): List<String> =
+    (items.sortedByDescending { it.createdAt }.map { pick(it).trim() } + defaults)
+        .filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase() }
+
 private fun fullDate(epochDay: Long): String =
     LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("EEE, MMM d"))
 
@@ -300,7 +306,14 @@ fun AppScreen(
     }
 
     editing?.let { item ->
-        EditSheet(item, onDismiss = { editing = null }, onSave = { vm.save(it); editing = null })
+        val all = actions + suggested
+        EditSheet(
+            item,
+            people = remember(actions, suggested) { recentValues(all, PEOPLE) { it.person } },
+            contexts = remember(actions, suggested) { recentValues(all, CONTEXTS) { it.context } },
+            onDismiss = { editing = null },
+            onSave = { vm.save(it); editing = null }
+        )
     }
 
     if (pickingTime) {
@@ -931,7 +944,13 @@ private fun PersonAvatar(name: String, size: Dp) {
 // ---------------------------------------------------------------- Edit sheet
 
 @Composable
-private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit) {
+private fun EditSheet(
+    item: Item,
+    people: List<String>,
+    contexts: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (Item) -> Unit
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var title by remember { mutableStateOf(item.title) }
     var person by remember { mutableStateOf(item.person) }
@@ -969,7 +988,7 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
                 shape = MaterialTheme.shapes.medium
             )
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PEOPLE.forEach { FilterChip(selected = person == it, onClick = { person = it }, label = { Text(it) }) }
+                people.forEach { FilterChip(selected = person.trim().equals(it, ignoreCase = true), onClick = { person = it }, label = { Text(it) }) }
             }
 
             SheetLabel("Context")
@@ -981,7 +1000,7 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
                 shape = MaterialTheme.shapes.medium
             )
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CONTEXTS.forEach { FilterChip(selected = context == it, onClick = { context = it }, label = { Text(it) }) }
+                contexts.forEach { FilterChip(selected = context.trim().equals(it, ignoreCase = true), onClick = { context = it }, label = { Text(it) }) }
             }
 
             SheetLabel("Due")
