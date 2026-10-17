@@ -6,6 +6,7 @@ import com.google.mlkit.genai.proofreading.Proofreading
 import com.google.mlkit.genai.proofreading.ProofreaderOptions
 import com.google.mlkit.genai.proofreading.ProofreadingRequest
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.STATUS_OPEN
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,7 +45,8 @@ object VoiceDraft {
             context = context(text, contexts),
             dueDate = (due(text, today) ?: today.plusDays(1)).toEpochDay(), // default: tomorrow
             status = STATUS_OPEN,
-            source = "VOICE"
+            source = "VOICE",
+            recurrence = recurrence(text).name
         )
         return Draft(item, text, nanoTitle != null)
     }
@@ -75,6 +77,24 @@ object VoiceDraft {
             if (d != null) return d
         }
         return Extractor.parseDue(text, today)
+    }
+
+    // ------------------------------------------------------------------ repeat
+
+    private val repeatPhrase = Regex(
+        """(?i)[\s,]*\b((every|each)\s+(single\s+)?(week\s?days?|day|week|month|year|($WEEKDAY))|daily|weekly|monthly|yearly|annually)\b"""
+    )
+
+    /** "every Monday", "each week", "daily", "every weekday"; the due date still comes from [due]. */
+    fun recurrence(text: String): Recurrence {
+        val phrase = repeatPhrase.find(text)?.groupValues?.get(1)?.lowercase() ?: return Recurrence.NONE
+        return when {
+            "weekday" in phrase || "week day" in phrase -> Recurrence.WEEKDAYS
+            phrase.endsWith("day") && !Regex(WEEKDAY).containsMatchIn(phrase) || phrase == "daily" -> Recurrence.DAILY
+            "week" in phrase || Regex(WEEKDAY).containsMatchIn(phrase) -> Recurrence.WEEKLY
+            "month" in phrase -> Recurrence.MONTHLY
+            else -> Recurrence.YEARLY
+        }
     }
 
     // ------------------------------------------------------------------ person / context
@@ -125,6 +145,7 @@ object VoiceDraft {
     fun title(text: String): String {
         val stripped = text
             .replace(leadIn, "")
+            .replace(repeatPhrase, "")
             .replace(datePhrase, "")
             .replace(clockTime, "")
             .replace(Regex("""(?i)\s+(and|to|by|on|for|due)\s*$"""), "")

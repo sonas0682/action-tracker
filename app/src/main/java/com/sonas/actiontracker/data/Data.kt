@@ -68,7 +68,10 @@ data class Item(
     val completedAt: Long? = null,
     /** A [TimeOfDay] name; new actions take the default for their context until changed. */
     @ColumnInfo(defaultValue = "EVENING")
-    val timeOfDay: String = TimeOfDay.defaultFor(context).name
+    val timeOfDay: String = TimeOfDay.defaultFor(context).name,
+    /** A [Recurrence] name; NONE for one-off actions. */
+    @ColumnInfo(defaultValue = "NONE")
+    val recurrence: String = Recurrence.NONE.name
 ) {
     companion object {
         fun blank() = Item(
@@ -109,6 +112,13 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE source = 'GMAIL' AND status IN ('SUGGESTED', 'OPEN') AND body = '' AND notes NOT LIKE 'Summary:%'")
     suspend fun awaitingSummary(): List<Item>
 
+    @Query("SELECT * FROM items WHERE id = :id")
+    suspend fun byId(id: Long): Item?
+
+    /** Removes the open occurrence a repeating action queued when it was ticked done at [completedAt]. */
+    @Query("DELETE FROM items WHERE status = 'OPEN' AND recurrence != 'NONE' AND title = :title AND createdAt = :completedAt")
+    suspend fun deleteQueuedOccurrence(title: String, completedAt: Long)
+
     @Query("SELECT * FROM items")
     suspend fun allItems(): List<Item>
 
@@ -144,7 +154,7 @@ interface ItemDao {
 }
 
 /** Room schema version; also written into Drive backups so restores know where they came from. */
-const val DB_VERSION = 4
+const val DB_VERSION = 5
 
 @Database(entities = [Item::class, Processed::class], version = DB_VERSION, exportSchema = false)
 abstract class Db : RoomDatabase() {
@@ -163,7 +173,7 @@ abstract class Db : RoomDatabase() {
             val factory = SupportOpenHelperFactory(DbKey.passphrase(context))
             return Room.databaseBuilder(context, Db::class.java, "tracker.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
         }
 
@@ -193,6 +203,13 @@ abstract class Db : RoomDatabase() {
                 afternoon.forEach {
                     db.execSQL("UPDATE items SET timeOfDay = 'AFTERNOON' WHERE id = ?", arrayOf<Any>(it))
                 }
+            }
+        }
+
+        /** Adds the repeat rule; every existing action stays one-off. */
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'NONE'")
             }
         }
     }

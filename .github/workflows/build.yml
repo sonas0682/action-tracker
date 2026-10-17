@@ -40,6 +40,9 @@ jobs:
             echo "No signing secrets found; using the default debug key."
           fi
 
+      - name: Unit tests
+        run: gradle :app:testDebugUnitTest --no-daemon
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
 

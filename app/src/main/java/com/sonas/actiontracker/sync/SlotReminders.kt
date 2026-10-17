@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.sonas.actiontracker.MainActivity
+import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.TimeOfDay
@@ -156,7 +157,7 @@ object SlotReminders {
 
     suspend fun markDone(context: Context, slot: TimeOfDay, itemId: Long) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_BASE + slot.ordinal)
-        Db.get(context).dao().markDone(itemId)
+        Actions.complete(Db.get(context), itemId)
         runCatching { DueWidget.refresh(context) }
     }
 

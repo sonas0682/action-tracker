@@ -138,6 +138,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sonas.actiontracker.sync.VoiceDraft
 import com.sonas.actiontracker.R
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
@@ -302,13 +303,16 @@ fun AppScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val deleteWithUndo: (Item) -> Unit = { item ->
-        vm.delete(item)
         scope.launch {
+            // A repeating action only loses this occurrence; the series moves on to the next date.
+            val queued = vm.delete(item)
             snackbar.currentSnackbarData?.dismiss()
             val result = snackbar.showSnackbar(
-                "Deleted \"${item.title}\"", actionLabel = "Undo", duration = SnackbarDuration.Short
+                queued?.let { "Skipped \"${item.title}\"  ·  next ${shortDue(it.dueDate)}" }
+                    ?: "Deleted \"${item.title}\"",
+                actionLabel = "Undo", duration = SnackbarDuration.Short
             )
-            if (result == SnackbarResult.ActionPerformed) vm.restore(item)
+            if (result == SnackbarResult.ActionPerformed) vm.restore(item, queued)
         }
     }
     vm.message?.let { lastMessage = it }
@@ -1101,6 +1105,13 @@ private fun ActionRow(
                 }
             }
             Spacer(Modifier.width(8.dp))
+            if (Recurrence.of(item.recurrence) != Recurrence.NONE) {
+                Icon(
+                    painterResource(R.drawable.ic_repeat), "Repeats ${Recurrence.of(item.recurrence).label.lowercase()}",
+                    tint = Fresh.TextDim, modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
             TimeIcon(TimeOfDay.of(item.timeOfDay))
         }
     }
@@ -1177,6 +1188,7 @@ private fun EditSheet(
     var timePicked by remember { mutableStateOf(item.id != 0L) }
     var pickedTime by remember { mutableStateOf(TimeOfDay.of(item.timeOfDay)) }
     val time = if (timePicked) pickedTime else TimeOfDay.defaultFor(context)
+    var repeat by remember { mutableStateOf(Recurrence.of(item.recurrence)) }
     var pickDate by remember { mutableStateOf(false) }
     val t = today()
 
@@ -1248,6 +1260,13 @@ private fun EditSheet(
                 }
             }
 
+            SheetLabel("Repeat")
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Recurrence.entries.forEach { r ->
+                    FilterChip(selected = repeat == r, onClick = { repeat = r }, label = { Text(repeatLabel(r, due)) })
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
@@ -1262,7 +1281,8 @@ private fun EditSheet(
                                 person = person.trim().ifEmpty { "Me" },
                                 context = context.trim().ifEmpty { "Work" },
                                 dueDate = due,
-                                timeOfDay = time.name
+                                timeOfDay = time.name,
+                                recurrence = repeat.name
                             )
                         )
                     }
@@ -1286,6 +1306,25 @@ private fun EditSheet(
             DatePicker(state = state)
         }
     }
+}
+
+/** "Weekly on Fri", "Monthly on the 17th": the anchor comes from the due date. */
+private fun repeatLabel(r: Recurrence, due: Long): String {
+    val d = LocalDate.ofEpochDay(due)
+    return when (r) {
+        Recurrence.WEEKLY -> "Weekly on " + d.format(DateTimeFormatter.ofPattern("EEE"))
+        Recurrence.MONTHLY -> "Monthly on the " + ordinal(d.dayOfMonth)
+        Recurrence.YEARLY -> "Yearly on " + d.format(DateTimeFormatter.ofPattern("MMM d"))
+        else -> r.label
+    }
+}
+
+private fun ordinal(n: Int): String = n.toString() + when {
+    n % 100 in 11..13 -> "th"
+    n % 10 == 1 -> "st"
+    n % 10 == 2 -> "nd"
+    n % 10 == 3 -> "rd"
+    else -> "th"
 }
 
 @Composable
