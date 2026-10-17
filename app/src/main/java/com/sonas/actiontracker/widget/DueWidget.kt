@@ -237,11 +237,25 @@ private fun DayTab(
 
 @Composable
 private fun TimeHeader(time: TimeOfDay, accent: Color) {
-    Text(
-        "${time.emoji}  ${time.label.uppercase()}",
+    val icon = when (time) {
+        TimeOfDay.MORNING -> R.drawable.ic_time_morning
+        TimeOfDay.EVENING -> R.drawable.ic_time_evening
+        else -> null
+    }
+    Row(
         modifier = GlanceModifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp, bottom = 3.dp),
-        style = TextStyle(color = c(accent), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-    )
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Sunrise / sunset as tinted icons; Afternoon and Night keep their sun and moon emoji.
+        if (icon != null) {
+            Image(ImageProvider(icon), contentDescription = null, colorFilter = ColorFilter.tint(c(accent)), modifier = GlanceModifier.size(12.dp))
+            Spacer(GlanceModifier.width(4.dp))
+        }
+        Text(
+            if (icon != null) time.label.uppercase() else "${time.emoji}  ${time.label.uppercase()}",
+            style = TextStyle(color = c(accent), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        )
+    }
 }
 
 @Composable

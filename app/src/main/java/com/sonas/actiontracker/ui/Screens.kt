@@ -122,6 +122,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -134,6 +135,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sonas.actiontracker.sync.VoiceDraft
+import com.sonas.actiontracker.R
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
@@ -1034,13 +1036,19 @@ private fun ActionRow(
                     }
                 }
             }
-            val time = TimeOfDay.of(item.timeOfDay)
             Spacer(Modifier.width(8.dp))
-            Text(
-                time.emoji, fontSize = 18.sp,
-                modifier = Modifier.semantics { contentDescription = time.label }
-            )
+            TimeIcon(TimeOfDay.of(item.timeOfDay))
         }
+    }
+}
+
+/** Sunrise / sunset drawn as tinted icons; Afternoon and Night keep their sun and moon emoji. */
+@Composable
+private fun TimeIcon(time: TimeOfDay) {
+    when (time) {
+        TimeOfDay.MORNING -> Icon(painterResource(R.drawable.ic_time_morning), time.label, tint = Fresh.Amber, modifier = Modifier.size(22.dp))
+        TimeOfDay.EVENING -> Icon(painterResource(R.drawable.ic_time_evening), time.label, tint = Fresh.Coral, modifier = Modifier.size(22.dp))
+        else -> Text(time.emoji, fontSize = 18.sp, modifier = Modifier.semantics { contentDescription = time.label })
     }
 }
 
