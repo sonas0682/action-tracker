@@ -16,7 +16,9 @@ App
   and Context are the alternatives.
 - The add button is an icon-only `+` (long-press opens voice capture). No per-row delete icon:
   swipe left or right deletes, with Undo in the snackbar.
-- The edit sheet offers every person/context already used as chips so nothing is retyped.
+- The edit sheet is compact (at most 3/4 of the screen). Person and Context are typeable
+  dropdowns of every value already used, so nothing is retyped; no chip rows under them.
+  Due/Time and Repeat/Ends sit side by side as dropdown pills.
 - Rows stay white; don't put tinted layers behind translucent rows.
 
 Widget (`widget/DueWidget.kt`)
