@@ -80,7 +80,9 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -1355,6 +1357,8 @@ private fun EditSheet(
                         onPick = { i -> pickedTime = TimeOfDay.entries[i]; timePicked = true },
                         modifier = Modifier.weight(1f)
                     )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PickerPill(
                         label = "Repeat",
                         value = repeat.label,
@@ -1363,23 +1367,22 @@ private fun EditSheet(
                         onPick = { i -> repeat = Recurrence.entries[i] },
                         modifier = Modifier.weight(1f)
                     )
-                    // Only for repeating actions, in the same row so the sheet doesn't grow.
-                    if (repeat != Recurrence.NONE) {
-                        PickerPill(
-                            label = "Ends",
-                            value = endCount?.let { "$it times" } ?: endDate?.let { shortDate(it) } ?: "Never",
-                            options = listOf("Never", "On a date…", "After a number of times…"),
-                            selected = when { endCount != null -> 2; endDate != null -> 1; else -> 0 },
-                            onPick = { i ->
-                                when (i) {
-                                    0 -> { endDate = null; endCount = null }
-                                    1 -> pickEndDate = true
-                                    else -> pickEndCount = true
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    // Beside Repeat; only active once the action repeats.
+                    PickerPill(
+                        label = "Ends",
+                        value = if (repeat == Recurrence.NONE) "—" else endCount?.let { "$it times" } ?: endDate?.let { shortDate(it) } ?: "Never",
+                        options = listOf("Never", "On a date…", "After a number of times…"),
+                        enabled = repeat != Recurrence.NONE,
+                        selected = when { endCount != null -> 2; endDate != null -> 1; else -> 0 },
+                        onPick = { i ->
+                            when (i) {
+                                0 -> { endDate = null; endCount = null }
+                                1 -> pickEndDate = true
+                                else -> pickEndCount = true
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
@@ -1491,7 +1494,10 @@ private fun ordinal(n: Int): String = n.toString() + when {
     else -> "th"
 }
 
-/** Half-width text field with the previously used values as one scrolling chip row under it. */
+/**
+ * Half-width text field that is also a dropdown of previously used values: tap to pick one,
+ * or type a new value (it joins the list once an action is saved with it).
+ */
 @Composable
 private fun SavedValueField(
     value: String,
@@ -1501,23 +1507,27 @@ private fun SavedValueField(
     saved: List<String>,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    var open by remember { mutableStateOf(false) }
+    val typed = value.trim()
+    // Show everything until the text narrows it; a value picked from the list keeps the full list.
+    val options = if (typed.isEmpty() || saved.any { it.equals(typed, ignoreCase = true) }) saved
+        else saved.filter { it.contains(typed, ignoreCase = true) }
+    ExposedDropdownMenuBox(expanded = open && options.isNotEmpty(), onExpandedChange = { open = it }, modifier = modifier) {
         OutlinedTextField(
-            value = value, onValueChange = onValueChange,
+            value = value, onValueChange = { onValueChange(it); open = true },
             label = { Text(label) }, singleLine = true,
             leadingIcon = { Icon(icon, null, Modifier.size(20.dp)) },
-            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = { if (saved.isNotEmpty()) ExposedDropdownMenuDefaults.TrailingIcon(expanded = open && options.isNotEmpty()) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
             shape = MaterialTheme.shapes.medium
         )
-        if (saved.isNotEmpty()) {
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                saved.forEach {
-                    FilterChip(
-                        selected = value.trim().equals(it, ignoreCase = true),
-                        onClick = { onValueChange(it) },
-                        label = { Text(it, maxLines = 1) }
-                    )
-                }
+        ExposedDropdownMenu(expanded = open && options.isNotEmpty(), onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onValueChange(option); open = false },
+                    trailingIcon = { if (option.equals(typed, ignoreCase = true)) Icon(Icons.Rounded.Check, null, tint = Fresh.Teal) }
+                )
             }
         }
     }
@@ -1531,18 +1541,19 @@ private fun PickerPill(
     options: List<String>,
     selected: Int,
     onPick: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
         Column(
             Modifier.fillMaxWidth()
                 .clip(MaterialTheme.shapes.medium)
-                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
-                .clickable { open = true }
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 1f else 0.4f), MaterialTheme.shapes.medium)
+                .clickable(enabled = enabled) { open = true }
                 .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
         ) {
-            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.Teal)
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (enabled) Fresh.Teal else Fresh.TextDim)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     value, style = MaterialTheme.typography.bodyMedium,
