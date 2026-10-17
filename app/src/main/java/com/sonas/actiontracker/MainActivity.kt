@@ -130,6 +130,7 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         if (!lockEnabled) {
             vm.smartTitles()
+            vm.widgetSummary()
             return
         }
         // Re-lock if the app was in the background for more than 30 seconds.
@@ -164,6 +165,7 @@ class MainActivity : FragmentActivity() {
     private fun onUnlocked() {
         unlocked = true
         vm.smartTitles()
+        vm.widgetSummary()
         askNotificationPermission()
     }
 
