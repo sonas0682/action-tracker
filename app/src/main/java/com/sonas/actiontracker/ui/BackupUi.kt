@@ -1,0 +1,185 @@
+package com.sonas.actiontracker.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.unit.dp
+import java.text.DateFormat
+import java.util.Date
+
+private enum class BackupMode { WELCOME, MAIN, SET_UP, RESTORE }
+
+private const val MIN_PASSPHRASE = 8
+
+private fun formatTime(at: Long): String =
+    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(at))
+
+/**
+ * Google Drive backup settings. Drive access is requested by the caller, so each
+ * action hands back only what it needs (the passphrase) and the activity supplies a token.
+ *
+ * With [welcome] it opens on the fresh-install offer to look for an existing backup.
+ */
+@Composable
+fun BackupDialog(
+    vm: MainVM,
+    welcome: Boolean,
+    onFindBackup: () -> Unit,
+    onTurnOn: (passphrase: String, replace: Boolean) -> Unit,
+    onBackUpNow: () -> Unit,
+    onRestore: (passphrase: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val status = vm.backupStatus
+    var mode by remember {
+        mutableStateOf(
+            when {
+                welcome -> BackupMode.WELCOME
+                status.enabled -> BackupMode.MAIN
+                else -> BackupMode.SET_UP
+            }
+        )
+    }
+    var pass by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    val remote = vm.remoteBackup
+    val found = remote as? MainVM.RemoteBackup.Found
+    val foundLabel = found?.modifiedAt?.let { "Backup found from ${formatTime(it)}." } ?: "Backup found."
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                when (mode) {
+                    BackupMode.WELCOME -> "Restore your actions?"
+                    BackupMode.RESTORE -> "Restore from Google Drive"
+                    else -> "Google Drive backup"
+                }
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (mode) {
+                    BackupMode.WELCOME -> if (remote == MainVM.RemoteBackup.None) {
+                        Text("No backup was found in this Google account. Turn on backup so your actions are saved from now on.")
+                    } else {
+                        Text(
+                            "Reinstalled the app or set up a new phone? If you turned on Google Drive backup before, " +
+                                "sign in with the same Google account to bring your actions back."
+                        )
+                    }
+                    BackupMode.MAIN -> {
+                        Text(
+                            "Your actions are encrypted with your passphrase and saved to a hidden app folder in your " +
+                                "Google Drive a couple of minutes after each change, and once a day."
+                        )
+                        Text(
+                            "To get them back after reinstalling or on another phone, sign in with the same Google " +
+                                "account, choose Restore and enter your passphrase."
+                        )
+                        Text(vm.lastBackupLabel(), style = MaterialTheme.typography.bodyMedium)
+                    }
+                    BackupMode.SET_UP -> {
+                        if (found != null) {
+                            Text(
+                                "$foundLabel Restore it to bring those actions to this phone, or replace it with " +
+                                    "what's on this phone now.",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Text(
+                            "Choose a backup passphrase. It encrypts the backup before it leaves the phone, " +
+                                "and you'll need it to restore on a new phone. It can't be recovered if you forget it."
+                        )
+                        PassField("Passphrase (8+ characters)", pass) { pass = it }
+                        PassField("Repeat passphrase", confirm) { confirm = it }
+                        if (confirm.isNotEmpty() && confirm != pass) {
+                            Text("Passphrases don't match", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    BackupMode.RESTORE -> {
+                        if (found != null) Text(foundLabel, style = MaterialTheme.typography.bodyMedium)
+                        Text("Enter the passphrase you chose when you turned on backup.")
+                        Text(
+                            "This replaces every action on this phone with the backup, then keeps backing up automatically.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        PassField("Backup passphrase", pass) { pass = it }
+                    }
+                }
+                if (vm.backupBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            when (mode) {
+                BackupMode.WELCOME -> if (remote == MainVM.RemoteBackup.None) {
+                    TextButton(onClick = { mode = BackupMode.SET_UP }) { Text("Set up backup") }
+                } else {
+                    TextButton(onClick = onFindBackup, enabled = !vm.backupBusy) { Text("Look for a backup") }
+                }
+                BackupMode.MAIN -> TextButton(onClick = onBackUpNow, enabled = !vm.backupBusy) { Text("Back up now") }
+                BackupMode.SET_UP -> TextButton(
+                    onClick = { onTurnOn(pass, found != null) },
+                    enabled = !vm.backupBusy && pass.length >= MIN_PASSPHRASE && pass == confirm
+                ) { Text(if (found != null) "Replace it" else "Turn on") }
+                BackupMode.RESTORE -> TextButton(
+                    onClick = { onRestore(pass) },
+                    enabled = !vm.backupBusy && pass.isNotEmpty()
+                ) { Text("Restore") }
+            }
+        },
+        dismissButton = {
+            when (mode) {
+                BackupMode.WELCOME -> TextButton(onClick = onDismiss) { Text("Not now") }
+                BackupMode.MAIN -> Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = { pass = ""; mode = BackupMode.RESTORE }) { Text("Restore…") }
+                    TextButton(onClick = { vm.disableBackup(); onDismiss() }) { Text("Turn off") }
+                }
+                BackupMode.SET_UP -> TextButton(onClick = { pass = ""; mode = BackupMode.RESTORE }) { Text("Restore instead") }
+                BackupMode.RESTORE -> TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+
+    // Looking for a backup from the welcome screen: go straight to restore when one exists.
+    LaunchedEffect(remote) {
+        if (mode == BackupMode.WELCOME && remote is MainVM.RemoteBackup.Found) { pass = ""; mode = BackupMode.RESTORE }
+    }
+
+    // After a successful turn-on, backup or restore, show the backup summary.
+    val successes = vm.backupSuccesses
+    val seen = remember { successes }
+    LaunchedEffect(successes) {
+        if (successes != seen) { pass = ""; confirm = ""; mode = BackupMode.MAIN }
+    }
+}
+
+@Composable
+private fun PassField(label: String, value: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier.fillMaxWidth()
+    )
+}

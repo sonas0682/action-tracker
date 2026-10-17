@@ -73,6 +73,11 @@ dependencies {
     // Home-screen widget
     implementation("androidx.glance:glance-appwidget:1.1.1")
 
+    // On-device Gemini Nano (ML Kit GenAI) for cleaner email suggestion titles
+    implementation("com.google.mlkit:genai-summarization:1.0.0-beta1")
+    // On-device Gemini Nano proofreading (voice input mode) to tidy spoken task titles
+    implementation("com.google.mlkit:genai-proofreading:1.0.0-beta1")
+
     // Background sync
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
