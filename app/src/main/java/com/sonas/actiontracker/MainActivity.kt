@@ -48,6 +48,8 @@ class MainActivity : FragmentActivity() {
     private var lockEnabled by mutableStateOf(false)
     private var reminders by mutableStateOf(Reminders.Settings(true, LocalTime.of(8, 0)))
     private var lastStop = 0L
+    /** True while the saved crash trace is on screen instead of the app. */
+    private var crashScreen = false
 
     private val authLauncher =
         registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
@@ -79,6 +81,8 @@ class MainActivity : FragmentActivity() {
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
+        // After a crash, show only the saved trace: the normal start-up may be what crashes.
+        if (showLastCrash()) return
         val prefs = getSharedPreferences("ui", MODE_PRIVATE)
         lockEnabled = prefs.getBoolean("lock_enabled", false)
         if (!lockEnabled) {
@@ -128,6 +132,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (crashScreen) return
         if (!lockEnabled) {
             vm.smartTitles()
             return
@@ -201,6 +206,52 @@ class MainActivity : FragmentActivity() {
                 }
                 .onFailure { vm.message = "Google Drive sign-in failed: ${it.message}" }
         }
+    }
+
+    /**
+     * If [App] saved a crash, shows its stack trace on a plain screen that touches
+     * nothing else (no database, no Compose), with Copy and Open app buttons.
+     */
+    private fun showLastCrash(): Boolean {
+        val file = App.crashFile(application)
+        val trace = runCatching { file.readText() }.getOrNull() ?: return false
+        crashScreen = true
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val text = android.widget.TextView(this).apply {
+            setText(trace)
+            setTextIsSelectable(true)
+            textSize = 12f
+            setTextColor(android.graphics.Color.BLACK)
+        }
+        val copy = android.widget.Button(this).apply {
+            setText("Copy error")
+            setOnClickListener {
+                getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("crash", trace))
+                android.widget.Toast.makeText(this@MainActivity, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+        val open = android.widget.Button(this).apply {
+            setText("Open app")
+            setOnClickListener {
+                file.delete()
+                recreate()
+            }
+        }
+        val column = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad * 3, pad, pad)
+            addView(android.widget.TextView(this@MainActivity).apply {
+                setText("Action Tracker crashed last time")
+                textSize = 18f
+                setTextColor(android.graphics.Color.BLACK)
+            })
+            addView(copy)
+            addView(open)
+            addView(text)
+        }
+        setContentView(android.widget.ScrollView(this).apply { addView(column) })
+        return true
     }
 
     private fun scheduleBackgroundSync() {
