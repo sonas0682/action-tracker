@@ -121,6 +121,8 @@ class MainVM(app: Application) : AndroidViewModel(app) {
             }
             syncing = false
             SmartTitles.run(getApplication())
+            val backfilled = SmartTitles.backfill(getApplication(), token)
+            if (backfilled > 0) message = "Added email summaries to $backfilled earlier item(s)"
         }
     }
 }

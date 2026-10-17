@@ -679,7 +679,7 @@ private fun SuggestionRow(
             Column(Modifier.padding(start = 40.dp, top = 6.dp, end = 6.dp)) {
                 if (item.notes.isNotBlank()) {
                     Text(
-                        item.notes, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                        item.notes, maxLines = 10, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall, color = Fresh.TextDim
                     )
                 }

@@ -76,6 +76,25 @@ object Gmail {
     }
 }
 
+/**
+ * Finds the id of a message already turned into an item, by its subject and sender, within a
+ * few days of when the item was created. Items don't store the Gmail id, so this is a best match.
+ */
+suspend fun Gmail.find(subject: String, from: String, createdAt: Long, token: String): String? = withContext(Dispatchers.IO) {
+    val words = subject.replace(Regex("[\"(){}:]"), " ").replace(Regex("\\s+"), " ").trim()
+    if (words.isEmpty()) return@withContext null
+    val sender = Regex("<([^>]+)>").find(from)?.groupValues?.get(1) ?: from.trim()
+    val created = createdAt / 1000
+    val q = buildString {
+        append("subject:\"$words\" after:${created - 5 * 86_400L} before:${created + 86_400L}")
+        if (sender.contains('@')) append(" from:$sender")
+    }
+    val list = JSONObject(
+        httpGet("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${URLEncoder.encode(q, "UTF-8")}&maxResults=1", token)
+    )
+    list.optJSONArray("messages")?.optJSONObject(0)?.optString("id")?.ifEmpty { null }
+}
+
 /** Plain text of one message (text/plain part, or tag-stripped HTML), for the on-device title pass. */
 suspend fun Gmail.body(id: String, token: String): String = withContext(Dispatchers.IO) {
     val payload = JSONObject(httpGet("https://gmail.googleapis.com/gmail/v1/users/me/messages/$id?format=full", token))
