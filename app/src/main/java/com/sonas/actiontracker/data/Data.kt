@@ -33,8 +33,8 @@ const val STATUS_OPEN = "OPEN"
 const val STATUS_DONE = "DONE"
 
 /** When in the day an action is meant to happen; stored by name in [Item.timeOfDay]. */
-enum class TimeOfDay(val label: String) {
-    MORNING("Morning"), AFTERNOON("Afternoon"), EVENING("Evening"), NIGHT("Night");
+enum class TimeOfDay(val label: String, val emoji: String) {
+    MORNING("Morning", "🌅"), AFTERNOON("Afternoon", "☀️"), EVENING("Evening", "🌇"), NIGHT("Night", "🌙");
 
     companion object {
         private val workContext = Regex("""(?i)\b(work|office)\b""")

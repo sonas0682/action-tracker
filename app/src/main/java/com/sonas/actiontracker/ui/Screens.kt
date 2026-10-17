@@ -122,6 +122,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -142,7 +144,7 @@ import java.time.LocalTime
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
-enum class Group(val label: String) { DATE("Date"), PERSON("Person"), CONTEXT("Context") }
+enum class Group(val label: String) { TIME("Time"), DATE("Date"), PERSON("Person"), CONTEXT("Context") }
 
 private val PEOPLE = listOf("Me", "Nathiya", "Vibu", "Dharshu")
 private val CONTEXTS = listOf("Work", "Family", "Kids/School")
@@ -273,7 +275,7 @@ fun AppScreen(
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
-    var group by remember { mutableStateOf(Group.DATE) }
+    var group by remember { mutableStateOf(Group.TIME) }
     var insights by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
@@ -885,11 +887,16 @@ private fun ActionsList(
     val open = actions.filter { it.status == STATUS_OPEN }
     val done = actions.filter { it.status == STATUS_DONE }
     val grouped: List<Pair<String, List<Item>>> = when (group) {
+        Group.TIME -> open.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap()
+            .map { (time, list) -> time.label to list }
         Group.DATE -> open.groupBy { dateLabel(it.dueDate) }.toList()
         Group.PERSON -> open.groupBy { it.person }.toList().sortedBy { it.first }
         Group.CONTEXT -> open.groupBy { it.context }.toList().sortedBy { it.first }
     }
-    val sections = grouped.map { (label, list) -> Section("h-$label", label, list) } +
+    // Inside a section, actions run Morning → Night (a stable sort, so due order holds within a slot).
+    val sections = grouped.map { (label, list) ->
+        Section("h-$label", label, list.sortedBy { TimeOfDay.of(it.timeOfDay).ordinal })
+    } +
         if (done.isNotEmpty()) listOf(Section("done-header", "Done", done)) else emptyList()
 
     LazyColumn(
@@ -928,8 +935,13 @@ private fun ActionsList(
 
 @Composable
 private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modifier = Modifier) {
+    val time = if (group == Group.TIME) TimeOfDay.entries.firstOrNull { it.label == label } else null
     val accent = when {
         label == "Done" -> Fresh.TextDim
+        time == TimeOfDay.MORNING -> Fresh.Amber
+        time == TimeOfDay.AFTERNOON -> Fresh.Sky
+        time == TimeOfDay.EVENING -> Fresh.Coral
+        time == TimeOfDay.NIGHT -> Fresh.Indigo
         group == Group.DATE && label == "Overdue" -> Fresh.Coral
         group == Group.DATE && label == "Today" -> Fresh.Sky
         group == Group.DATE && label == "Tomorrow" -> Fresh.Amber
@@ -1022,6 +1034,12 @@ private fun ActionRow(
                     }
                 }
             }
+            val time = TimeOfDay.of(item.timeOfDay)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                time.emoji, fontSize = 18.sp,
+                modifier = Modifier.semantics { contentDescription = time.label }
+            )
         }
     }
 }

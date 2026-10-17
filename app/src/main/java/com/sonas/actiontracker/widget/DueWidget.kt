@@ -238,7 +238,7 @@ private fun DayTab(
 @Composable
 private fun TimeHeader(time: TimeOfDay, accent: Color) {
     Text(
-        time.label.uppercase(),
+        "${time.emoji}  ${time.label.uppercase()}",
         modifier = GlanceModifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp, bottom = 3.dp),
         style = TextStyle(color = c(accent), fontSize = 10.sp, fontWeight = FontWeight.Bold)
     )
