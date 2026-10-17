@@ -19,6 +19,12 @@ encrypted on the phone.
 - **No duplicates**: every Gmail message ID / calendar event ID is recorded the first time it is seen and never evaluated again, even if you dismiss the suggestion.
 - **Background sync** every ~2 hours with a notification when new suggestions arrive.
 - **Daily due-date reminder** (default 8:00 AM, change it or turn it off from the ⋮ menu): one notification listing open actions due today or overdue. The lock screen shows only the count.
+- **Time of day**: every action has a Morning / Afternoon / Evening / Night slot (work contexts default to Afternoon, everything else to Evening). Group the list by Time to see them.
+- **Time-of-day reminders** (settings in the ⋮ menu): a heads-up notification per slot (12 PM, 4 PM, 7 PM and 10 PM by default) listing that slot's open actions due today or overdue, with Snooze 30 min and Done buttons.
+- **Repeating actions**: set Repeat (daily, weekdays, weekly, monthly, yearly) in the edit sheet, or say it ("every Monday"). Ticking one done, from the app, widget or a reminder, queues the next date; deleting one skips to the next.
+- **Voice capture**: long-press + and say the task ("remind me to sign Vibu's permission slip by Friday"); due date, person, context and repeat are picked out of the sentence, and on-device Gemini Nano tidies the title.
+- **Calendar and stats**: the calendar icon in the top bar opens a month view of due and done actions plus completion stats.
+- **Crash report**: if the app crashes, the next launch shows the stack trace so it can be shared.
 
 - **Home-screen widget**: Today (overdue included) and Tomorrow tabs with their counts; tap a tab to see that day's open actions as compact one-line cards, with late-days, person and context tags next to the title. Tap the circle to mark an action done; the widget also updates on its own whenever you add, edit, complete or delete an action in the app. Tap anything else to open the app. Long-press the home screen → Widgets → Action Tracker to add it; it's resizable. Note that action titles are visible on the home screen even when the fingerprint lock is on.
 
@@ -55,10 +61,16 @@ Without these secrets the workflow signs with a throwaway debug key, and the SHA
 
 ## Stack
 
-Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometric · WorkManager · Google Identity Authorization API + Gmail/Calendar REST.
+Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometric · WorkManager + AlarmManager · Glance widget · ML Kit GenAI (Gemini Nano) · Google Identity Authorization API + Gmail/Calendar/Drive REST.
 
 ## Look and feel
 
-Light "Fresh" theme: airy off-white canvas with slowly drifting pastel glows,
-an indigo → sky → teal accent gradient, white glass cards, big expressive headings, a
-summary header (late / today / open / inbox), a sliding gradient tab switcher and a glowing New button.
+Light "Fresh" theme: airy off-white canvas with slowly drifting pastel glows, an
+indigo → sky → teal accent gradient and white glass cards. One slim top bar keeps the list
+front and centre, with an icon-only + button.
+
+## Working on the code
+
+`CLAUDE.md` describes the code layout, build commands and the rules every change follows
+(database migrations, privacy, UI style); `.claude/` holds the matching rules, skills and hooks
+used by Claude Code.
