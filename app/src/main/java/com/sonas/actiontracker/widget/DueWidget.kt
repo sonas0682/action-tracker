@@ -213,37 +213,39 @@ private fun DayTab(
 private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
     val overdueDays = epochDay - item.dueDate
     val tint = if (overdueDays > 0) W.Coral else accent
-    Column(modifier = GlanceModifier.fillMaxWidth().padding(bottom = 6.dp)) {
+    // One line per action: tick circle, title (gives way first), then late / person / context tags.
+    Column(modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth().cornerRadius(14.dp).background(W.Tile)
-                .padding(start = 6.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+            modifier = GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(W.Tile)
+                .padding(start = 2.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
                 provider = ImageProvider(R.drawable.ic_widget_circle),
                 contentDescription = "Mark done",
                 colorFilter = ColorFilter.tint(c(tint)),
-                modifier = GlanceModifier.size(34.dp).padding(6.dp)
+                modifier = GlanceModifier.size(30.dp).padding(6.dp)
                     .clickable(actionRunCallback<MarkDoneAction>(actionParametersOf(ItemIdKey to item.id)))
             )
-            Spacer(GlanceModifier.width(4.dp))
-            Column(modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>())) {
+            Row(
+                modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>()),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    item.title, maxLines = 2,
+                    item.title, maxLines = 1,
+                    modifier = GlanceModifier.defaultWeight(),
                     style = TextStyle(color = c(W.Text), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 )
-                Spacer(GlanceModifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (overdueDays > 0) {
-                        Chip(if (overdueDays == 1L) "1 day late" else "$overdueDays days late", W.CoralSoft, W.Coral)
-                        Spacer(GlanceModifier.width(4.dp))
-                    }
-                    if (item.person != "Me") {
-                        Chip(item.person, if (accent == W.Teal) W.TealSoft else W.IndigoSoft, accent)
-                        Spacer(GlanceModifier.width(4.dp))
-                    }
-                    Chip(item.context, W.Grey, W.TextDim)
+                if (overdueDays > 0) {
+                    Spacer(GlanceModifier.width(4.dp))
+                    Chip("${overdueDays}d late", W.CoralSoft, W.Coral)
                 }
+                if (item.person != "Me") {
+                    Spacer(GlanceModifier.width(4.dp))
+                    Chip(item.person, if (accent == W.Teal) W.TealSoft else W.IndigoSoft, accent)
+                }
+                Spacer(GlanceModifier.width(4.dp))
+                Chip(item.context, W.Grey, W.TextDim)
             }
         }
     }
