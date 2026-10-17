@@ -27,6 +27,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.gms.auth.api.identity.Identity
+import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.Notify
@@ -61,6 +62,8 @@ class MainActivity : FragmentActivity() {
     /** Drive work waiting for the user to grant Drive access. */
     private var pendingDrive: ((String) -> Unit)? = null
     private var showBackup by mutableStateOf(false)
+    /** Opens the backup dialog on the fresh-install "restore your actions?" offer. */
+    private var backupWelcome by mutableStateOf(false)
 
     private val driveAuthLauncher =
         registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
@@ -96,6 +99,7 @@ class MainActivity : FragmentActivity() {
         reminders = Reminders.settings(this)
         Reminders.schedule(this)
         Backup.schedule(this)
+        offerRestoreOnFreshInstall(prefs)
         setContent {
             AppTheme {
                 if (unlocked) {
@@ -112,12 +116,18 @@ class MainActivity : FragmentActivity() {
                             reminders = it
                             Reminders.save(this, it)
                         },
-                        onOpenBackup = { showBackup = true }
+                        onOpenBackup = {
+                            vm.refreshBackupStatus()
+                            backupWelcome = false
+                            showBackup = true
+                        }
                     )
                     if (showBackup) {
                         BackupDialog(
                             vm,
-                            onTurnOn = { pass -> withDriveToken { vm.enableBackup(pass, it) } },
+                            welcome = backupWelcome,
+                            onFindBackup = { withDriveToken { vm.findBackup(it) } },
+                            onTurnOn = { pass, replace -> withDriveToken { vm.enableBackup(pass, it, replace) } },
                             onBackUpNow = { withDriveToken { vm.backUpNow(it) } },
                             onRestore = { pass -> withDriveToken { vm.restoreBackup(pass, it) } },
                             onDismiss = { showBackup = false }
@@ -188,6 +198,22 @@ class MainActivity : FragmentActivity() {
                     }
                 }
                 .onFailure { vm.message = "Google sign-in failed: ${it.message}" }
+        }
+    }
+
+    /**
+     * Right after a fresh install (or on a new phone) the database is empty and backup
+     * is off: offer once to look for a Google Drive backup. The ⋮ menu has it after that.
+     */
+    private fun offerRestoreOnFreshInstall(prefs: android.content.SharedPreferences) {
+        if (prefs.getBoolean("restore_offered", false) || Backup.status(this).enabled) return
+        lifecycleScope.launch {
+            val empty = runCatching { Db.get(this@MainActivity).dao().count() == 0 }.getOrDefault(false)
+            prefs.edit().putBoolean("restore_offered", true).apply()
+            if (empty) {
+                backupWelcome = true
+                showBackup = true
+            }
         }
     }
 

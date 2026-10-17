@@ -8,7 +8,9 @@ import androidx.room.withTransaction
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -16,14 +18,19 @@ import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
+import com.sonas.actiontracker.data.DB_VERSION
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Processed
+import com.sonas.actiontracker.data.STATUS_DONE
+import com.sonas.actiontracker.data.STATUS_OPEN
+import com.sonas.actiontracker.data.STATUS_SUGGESTED
 import com.sonas.actiontracker.data.TimeOfDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -31,6 +38,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.security.KeyStore
 import java.security.SecureRandom
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -47,9 +55,14 @@ import javax.crypto.spec.SecretKeySpec
  * The file is AES-256-GCM encrypted with a key derived from a backup passphrase
  * (PBKDF2-SHA256), so Google never sees the contents and a new phone can restore
  * it with the passphrase alone. On this phone the derived key is kept wrapped by
- * the Android Keystore so the nightly backup can run without asking.
+ * the Android Keystore so backups can run in the background without asking.
+ *
+ * Backups run a couple of minutes after any change (debounced) and once a day.
  *
  * File layout: "ATB1" | salt (16) | iv (12) | ciphertext of the JSON export.
+ * The JSON carries the database schema version it was written from; import reads
+ * every field leniently, so a backup from an older or newer app version restores
+ * whatever fields this version knows and never fails on a version difference.
  */
 object Backup {
     private const val FILE_NAME = "action-tracker-backup.bin"
@@ -58,6 +71,11 @@ object Backup {
     private const val PREFS = "backup"
     private const val WRAP_ALIAS = "action_tracker_backup_wrap"
     private const val WORK = "drive_backup"
+    private const val WORK_SOON = "drive_backup_soon"
+    /** Quiet period after the last change before the automatic backup runs. */
+    private const val DEBOUNCE_MINUTES = 2L
+    /** Version of the JSON export format (independent of the database schema). */
+    private const val FORMAT = 2
     private const val DRIVE = "https://www.googleapis.com/drive/v3/files"
     private const val UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
 
@@ -76,7 +94,10 @@ object Backup {
             .authorize(AuthorizationRequest.builder().setRequestedScopes(listOf(scope)).build())
             .await()
 
-    /** Turns on backups with [passphrase] and starts the nightly job. */
+    /** The backup already in Google Drive, if any. */
+    data class Remote(val modifiedAt: Long?)
+
+    /** Turns on backups with [passphrase] and starts the daily job. */
     fun enable(context: Context, passphrase: CharArray) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         storeKey(context, salt, derive(passphrase, salt))
@@ -86,6 +107,25 @@ object Backup {
     fun disable(context: Context) {
         prefs(context).edit().remove("key").remove("key_iv").remove("salt").apply()
         WorkManager.getInstance(context).cancelUniqueWork(WORK)
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_SOON)
+    }
+
+    /**
+     * Backs up a couple of minutes after the latest change. Each call restarts the
+     * wait, so a burst of edits makes one upload. Does nothing while backup is off.
+     */
+    fun backUpSoon(context: Context) {
+        if (!status(context).enabled) return
+        val request = OneTimeWorkRequestBuilder<BackupWorker>()
+            .setInitialDelay(DEBOUNCE_MINUTES, TimeUnit.MINUTES)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(WORK_SOON, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /** Looks for an existing backup in this Google account's Drive. */
+    suspend fun findRemote(token: String): Remote? = withContext(Dispatchers.IO) {
+        findFileMeta(token)?.let { Remote(it.second) }
     }
 
     /** Daily backup whenever there is a network connection. Safe to call on every launch. */
@@ -102,18 +142,19 @@ object Backup {
     suspend fun backUp(context: Context, token: String) = withContext(Dispatchers.IO) {
         val (salt, key) = loadKey(context) ?: throw IllegalStateException("Backup isn't set up")
         val blob = encrypt(export(context).toString().toByteArray(Charsets.UTF_8), salt, key)
-        val existing = findFile(token)
+        val existing = findFileMeta(token)?.first
         if (existing == null) createFile(token, blob) else updateFile(token, existing, blob)
         prefs(context).edit().putLong("last", System.currentTimeMillis()).apply()
     }
 
     /**
      * Downloads the backup, decrypts it with [passphrase] and replaces everything on
-     * this phone with it. Also turns on nightly backups with the same passphrase.
-     * Returns the number of actions restored.
+     * this phone with it. Also turns on backups with the same passphrase.
+     * Returns the number of actions restored. Nothing on the phone changes unless
+     * the whole backup reads cleanly.
      */
     suspend fun restore(context: Context, token: String, passphrase: CharArray): Int = withContext(Dispatchers.IO) {
-        val id = findFile(token) ?: throw IOException("No backup found in your Google Drive")
+        val id = findFileMeta(token)?.first ?: throw IOException("No backup found in your Google Drive")
         val blob = download(token, id)
         if (blob.size < 33 || String(blob, 0, 4, Charsets.US_ASCII) != MAGIC) throw IOException("Not an Action Tracker backup")
         val salt = blob.copyOfRange(4, 20)
@@ -123,7 +164,12 @@ object Backup {
         } catch (e: Exception) {
             throw IOException("Wrong passphrase")
         }
-        val count = import(context, JSONObject(String(json, Charsets.UTF_8)))
+        val root = try {
+            JSONObject(String(json, Charsets.UTF_8))
+        } catch (e: JSONException) {
+            throw IOException("The backup file is damaged")
+        }
+        val count = import(context, root)
         storeKey(context, salt, key)
         schedule(context)
         count
@@ -146,38 +192,53 @@ object Backup {
         }
         val processed = JSONArray()
         dao.allProcessed().forEach { processed.put(JSONObject().put("key", it.sourceKey).put("at", it.at)) }
-        return JSONObject().put("version", 1).put("items", items).put("processed", processed)
+        return JSONObject()
+            .put("version", FORMAT).put("schema", DB_VERSION).put("exportedAt", System.currentTimeMillis())
+            .put("items", items).put("processed", processed)
     }
 
+    /**
+     * Replaces all local data with [root]. Every field is optional except the title:
+     * fields added after the backup was made take their defaults, fields from a newer
+     * app version are ignored, and a row that can't be read is skipped, not fatal.
+     */
     private suspend fun import(context: Context, root: JSONObject): Int {
+        val items = (root.optJSONArray("items") ?: JSONArray()).let { arr ->
+            (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(::itemFrom) }
+        }
+        val processed = (root.optJSONArray("processed") ?: JSONArray()).let { arr ->
+            (0 until arr.length()).mapNotNull { n ->
+                val o = arr.optJSONObject(n) ?: return@mapNotNull null
+                val key = o.optString("key").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                Processed(key, o.optLong("at", System.currentTimeMillis()))
+            }
+        }
         val db = Db.get(context)
         val dao = db.dao()
-        val items = root.getJSONArray("items")
-        val processed = root.getJSONArray("processed")
         db.withTransaction {
             dao.deleteAllItems()
             dao.deleteAllProcessed()
-            for (n in 0 until items.length()) {
-                val o = items.getJSONObject(n)
-                val ctx = o.optString("context", "Work")
-                dao.insert(
-                    Item(
-                        title = o.getString("title"), notes = o.optString("notes"),
-                        person = o.optString("person", "Me"), context = ctx,
-                        dueDate = o.getLong("dueDate"), status = o.getString("status"),
-                        source = o.optString("source", "CUSTOM"), createdAt = o.optLong("createdAt"),
-                        body = o.optString("body"),
-                        completedAt = if (o.has("completedAt")) o.getLong("completedAt") else null,
-                        timeOfDay = o.optString("timeOfDay", TimeOfDay.defaultFor(ctx).name)
-                    )
-                )
-            }
-            for (n in 0 until processed.length()) {
-                val o = processed.getJSONObject(n)
-                dao.markProcessed(Processed(o.getString("key"), o.getLong("at")))
-            }
+            items.forEach { dao.insert(it) }
+            processed.forEach { dao.markProcessed(it) }
         }
-        return items.length()
+        return items.size
+    }
+
+    private fun itemFrom(o: JSONObject): Item? {
+        val title = o.optString("title").takeIf { it.isNotBlank() } ?: return null
+        val ctx = o.optString("context", "Work")
+        val status = o.optString("status").takeIf { it in setOf(STATUS_SUGGESTED, STATUS_OPEN, STATUS_DONE) } ?: STATUS_OPEN
+        val time = o.optString("timeOfDay").takeIf { name -> TimeOfDay.entries.any { it.name == name } }
+        return Item(
+            title = title, notes = o.optString("notes"),
+            person = o.optString("person", "Me"), context = ctx,
+            dueDate = if (o.has("dueDate")) o.optLong("dueDate") else java.time.LocalDate.now().toEpochDay(),
+            status = status,
+            source = o.optString("source", "CUSTOM"), createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+            body = o.optString("body"),
+            completedAt = if (o.has("completedAt") && !o.isNull("completedAt")) o.optLong("completedAt") else null,
+            timeOfDay = time ?: TimeOfDay.defaultFor(ctx).name
+        )
     }
 
     // ------------------------------------------------------------ crypto
@@ -248,11 +309,15 @@ object Backup {
 
     // ------------------------------------------------------------ Drive REST
 
-    private fun findFile(token: String): String? {
+    /** The backup file's id and last-modified time (epoch millis), or null if there is none. */
+    private fun findFileMeta(token: String): Pair<String, Long?>? {
         val q = URLEncoder.encode("name = '$FILE_NAME'", "UTF-8")
-        val res = JSONObject(String(request("GET", "$DRIVE?spaces=appDataFolder&q=$q&fields=files(id)", token)))
+        val res = JSONObject(String(request("GET", "$DRIVE?spaces=appDataFolder&q=$q&fields=files(id,modifiedTime)", token)))
         val files = res.optJSONArray("files") ?: return null
-        return if (files.length() > 0) files.getJSONObject(0).getString("id") else null
+        if (files.length() == 0) return null
+        val f = files.getJSONObject(0)
+        val modified = runCatching { Instant.parse(f.getString("modifiedTime")).toEpochMilli() }.getOrNull()
+        return f.getString("id") to modified
     }
 
     private fun createFile(token: String, blob: ByteArray) {

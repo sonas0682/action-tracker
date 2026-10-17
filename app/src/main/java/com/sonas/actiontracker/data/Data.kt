@@ -112,6 +112,9 @@ interface ItemDao {
     @Query("SELECT * FROM items")
     suspend fun allItems(): List<Item>
 
+    @Query("SELECT COUNT(*) FROM items")
+    suspend fun count(): Int
+
     @Query("SELECT * FROM processed")
     suspend fun allProcessed(): List<Processed>
 
@@ -140,7 +143,10 @@ interface ItemDao {
     suspend fun markProcessed(p: Processed)
 }
 
-@Database(entities = [Item::class, Processed::class], version = 4, exportSchema = false)
+/** Room schema version; also written into Drive backups so restores know where they came from. */
+const val DB_VERSION = 4
+
+@Database(entities = [Item::class, Processed::class], version = DB_VERSION, exportSchema = false)
 abstract class Db : RoomDatabase() {
     abstract fun dao(): ItemDao
 
