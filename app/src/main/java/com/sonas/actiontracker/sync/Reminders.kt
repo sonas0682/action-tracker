@@ -58,10 +58,13 @@ object Reminders {
         schedule(context)
     }
 
-    /** Starts or stops the periodic check to match the saved settings. Safe to call on every launch. */
+    /**
+     * Starts or stops the periodic check to match the saved settings. Safe to call on every launch.
+     * The check also backs up the time-of-day reminders, so it runs while either kind is on.
+     */
     fun schedule(context: Context) {
         val wm = WorkManager.getInstance(context)
-        if (!settings(context).enabled) {
+        if (!settings(context).enabled && !SlotReminders.anyEnabled(context)) {
             wm.cancelUniqueWork(WORK)
             return
         }
@@ -147,6 +150,7 @@ object Reminders {
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         runCatching { Reminders.checkAndNotify(applicationContext) }
+        runCatching { SlotReminders.catchUp(applicationContext) }
         return Result.success()
     }
 }
