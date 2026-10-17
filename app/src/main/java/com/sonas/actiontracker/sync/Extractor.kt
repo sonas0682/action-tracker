@@ -44,14 +44,14 @@ object Extractor {
         due = parseDue(text, today) ?: today.plusDays(1) // default: one day
     )
 
-    private fun person(text: String): String = when {
+    internal fun person(text: String): String = when {
         Regex("(?i)nathiya").containsMatchIn(text) -> "Nathiya"
         Regex("(?i)vibu").containsMatchIn(text) -> "Vibu"
         Regex("(?i)dharshu|dharsini|dharsu").containsMatchIn(text) -> "Dharshu"
         else -> "Me"
     }
 
-    private fun context(text: String): String = when {
+    internal fun context(text: String): String = when {
         Regex("(?i)school|teacher|class|homework|pta|isd|field trip|permission slip|principal").containsMatchIn(text) -> "Kids/School"
         Regex("(?i)family|birthday|doctor|dentist|dinner|vacation|home").containsMatchIn(text) -> "Family"
         else -> "Work"

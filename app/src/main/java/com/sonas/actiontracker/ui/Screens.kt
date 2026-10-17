@@ -20,7 +20,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -120,7 +122,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sonas.actiontracker.sync.VoiceDraft
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
@@ -187,6 +198,7 @@ private fun dueColor(epochDay: Long, done: Boolean = false): Color {
 private fun sourceIcon(source: String): ImageVector = when (source) {
     "GMAIL" -> Icons.Rounded.Email
     "CALENDAR" -> Icons.Rounded.DateRange
+    "VOICE" -> MicIcon
     else -> Icons.Rounded.Create
 }
 
@@ -262,6 +274,20 @@ fun AppScreen(
     var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
     var group by remember { mutableStateOf(Group.DATE) }
     var editing by remember { mutableStateOf<Item?>(null) }
+    var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
+    var listening by remember { mutableStateOf(false) }
+    var drafting by remember { mutableStateOf(false) }
+    val appContext = LocalContext.current.applicationContext
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) listening = true else vm.message = "Voice capture needs microphone access"
+    }
+    val startListening = {
+        if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            listening = true
+        } else {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
     var pickingTime by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
@@ -321,7 +347,8 @@ fun AppScreen(
             }
         }
         NewActionFab(
-            onClick = { editing = Item.blank() },
+            onClick = { voiceDraft = null; editing = Item.blank() },
+            onLongClick = startListening,
             modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
         )
         SnackbarHost(
@@ -330,14 +357,34 @@ fun AppScreen(
         )
     }
 
+    val people = remember(actions, suggested) { recentValues(actions + suggested, PEOPLE) { it.person } }
+    val contexts = remember(actions, suggested) { recentValues(actions + suggested, CONTEXTS) { it.context } }
+
+    if (listening) {
+        ListenSheet(
+            drafting = drafting,
+            onHeard = { text ->
+                drafting = true
+                scope.launch {
+                    val draft = VoiceDraft.build(appContext, text, people, contexts)
+                    drafting = false
+                    listening = false
+                    voiceDraft = draft
+                    editing = draft.item
+                }
+            },
+            onDismiss = { if (!drafting) listening = false }
+        )
+    }
+
     editing?.let { item ->
-        val all = actions + suggested
         EditSheet(
             item,
-            people = remember(actions, suggested) { recentValues(all, PEOPLE) { it.person } },
-            contexts = remember(actions, suggested) { recentValues(all, CONTEXTS) { it.context } },
-            onDismiss = { editing = null },
-            onSave = { vm.save(it); editing = null }
+            people = people,
+            contexts = contexts,
+            voice = voiceDraft,
+            onDismiss = { editing = null; voiceDraft = null },
+            onSave = { vm.save(it); editing = null; voiceDraft = null }
         )
     }
 
@@ -564,7 +611,9 @@ private fun TabSwitcher(
 }
 
 @Composable
-private fun NewActionFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun NewActionFab(onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+    val haptics = LocalHapticFeedback.current
     val glow = rememberInfiniteTransition(label = "fab")
     val halo by glow.animateFloat(
         initialValue = 0.35f, targetValue = 0.7f,
@@ -574,7 +623,15 @@ private fun NewActionFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(CircleShape).background(Fresh.Teal.copy(alpha = halo * 0.35f)))
         Box(
-            Modifier.size(56.dp).clip(CircleShape).background(Fresh.accent).clickable(onClick = onClick),
+            Modifier.size(56.dp).clip(CircleShape).background(Fresh.accent).combinedClickable(
+                onClickLabel = "Add action",
+                onLongClickLabel = "Add action by voice",
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+                onClick = onClick
+            ),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Rounded.Add, contentDescription = "Add action", tint = Color.White, modifier = Modifier.size(28.dp))
@@ -993,6 +1050,7 @@ private fun EditSheet(
     item: Item,
     people: List<String>,
     contexts: List<String>,
+    voice: VoiceDraft.Draft? = null,
     onDismiss: () -> Unit,
     onSave: (Item) -> Unit
 ) {
@@ -1014,9 +1072,10 @@ private fun EditSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                if (item.id == 0L) "New action" else "Edit action",
+                if (voice != null) "Voice draft" else if (item.id == 0L) "New action" else "Edit action",
                 style = MaterialTheme.typography.headlineMedium.copy(brush = Fresh.accentHorizontal)
             )
+            voice?.let { VoiceNote(it) }
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
                 label = { Text("What needs doing?") },
