@@ -32,6 +32,7 @@ import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.Notify
 import com.sonas.actiontracker.sync.Reminders
+import com.sonas.actiontracker.sync.SlotReminders
 import com.sonas.actiontracker.sync.SyncWorker
 import com.sonas.actiontracker.ui.AppScreen
 import com.sonas.actiontracker.ui.AppTheme
@@ -98,6 +99,7 @@ class MainActivity : FragmentActivity() {
         scheduleBackgroundSync()
         reminders = Reminders.settings(this)
         Reminders.schedule(this)
+        SlotReminders.schedule(this)
         Backup.schedule(this)
         offerRestoreOnFreshInstall(prefs)
         setContent {

@@ -131,6 +131,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -141,6 +142,7 @@ import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Reminders
+import com.sonas.actiontracker.sync.SlotReminders
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlinx.coroutines.launch
@@ -295,6 +297,7 @@ fun AppScreen(
         }
     }
     var pickingTime by remember { mutableStateOf(false) }
+    var slotReminders by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -338,7 +341,9 @@ fun AppScreen(
                     menu = {
                         MoreMenu(
                             lockEnabled, onLockChange, reminders, onRemindersChange,
-                            onPickTime = { pickingTime = true }, onOpenBackup = onOpenBackup
+                            onPickTime = { pickingTime = true },
+                            onOpenSlotReminders = { slotReminders = true },
+                            onOpenBackup = onOpenBackup
                         )
                     }
                 )
@@ -404,8 +409,11 @@ fun AppScreen(
         )
     }
 
+    if (slotReminders) SlotRemindersDialog(onDismiss = { slotReminders = false })
+
     if (pickingTime) {
         ReminderTimeDialog(
+            title = "Remind me about due actions at",
             initial = reminders.time,
             onDismiss = { pickingTime = false },
             onConfirm = {
@@ -559,6 +567,7 @@ private fun MoreMenu(
     reminders: Reminders.Settings,
     onRemindersChange: (Reminders.Settings) -> Unit,
     onPickTime: () -> Unit,
+    onOpenSlotReminders: () -> Unit,
     onOpenBackup: () -> Unit
 ) {
     var open by remember { mutableStateOf(false) }
@@ -584,6 +593,10 @@ private fun MoreMenu(
                 text = { Text("Reminder time: ${reminders.time.format(TIME_FORMAT)}") },
                 enabled = reminders.enabled,
                 onClick = { open = false; onPickTime() }
+            )
+            DropdownMenuItem(
+                text = { Text("Time-of-day reminders") },
+                onClick = { open = false; onOpenSlotReminders() }
             )
             DropdownMenuItem(
                 text = { Text("Google Drive backup") },
@@ -680,15 +693,69 @@ private fun GradientButton(text: String, icon: ImageVector?, onClick: () -> Unit
 }
 
 @Composable
-private fun ReminderTimeDialog(initial: LocalTime, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
+private fun ReminderTimeDialog(title: String, initial: LocalTime, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
     val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = false)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Remind me about due actions at") },
+        title = { Text(title) },
         text = { TimePicker(state = state) },
         confirmButton = { TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+/** One row per time of day: on/off and the time its pop-up reminder fires. */
+@Composable
+private fun SlotRemindersDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    var slots by remember { mutableStateOf(SlotReminders.settings(context)) }
+    var editing by remember { mutableStateOf<SlotReminders.Slot?>(null) }
+    val update: (SlotReminders.Slot) -> Unit = { changed ->
+        SlotReminders.save(context, changed)
+        slots = slots.map { if (it.slot == changed.slot) changed else it }
+    }
+    val notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Time-of-day reminders") },
+        text = {
+            Column {
+                Text(
+                    "A pop-up lists the open actions for each time of day that are due today or overdue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Fresh.TextDim
+                )
+                if (!notificationsOn) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Notifications are off for Action Tracker; turn them on in Android settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                slots.forEach { s ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${s.slot.emoji}  ${s.slot.label}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { editing = s }, enabled = s.enabled) { Text(s.time.format(TIME_FORMAT)) }
+                        Switch(checked = s.enabled, onCheckedChange = { update(s.copy(enabled = it)) })
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+    editing?.let { s ->
+        ReminderTimeDialog(
+            title = "Remind me about ${s.slot.label.lowercase()} actions at",
+            initial = s.time,
+            onDismiss = { editing = null },
+            onConfirm = {
+                update(s.copy(time = it))
+                editing = null
+            }
+        )
+    }
 }
 
 @Composable
