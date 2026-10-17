@@ -92,6 +92,7 @@ class MainActivity : FragmentActivity() {
         reminders = Reminders.settings(this)
         Reminders.schedule(this)
         Backup.schedule(this)
+        showLastCrash()
         setContent {
             AppTheme {
                 if (unlocked) {
@@ -201,6 +202,22 @@ class MainActivity : FragmentActivity() {
                 }
                 .onFailure { vm.message = "Google Drive sign-in failed: ${it.message}" }
         }
+    }
+
+    /** Shows the stack trace saved by [App] after a crash, once, with a button to copy it. */
+    private fun showLastCrash() {
+        val file = App.crashFile(application)
+        val trace = runCatching { file.readText() }.getOrNull() ?: return
+        file.delete()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Action Tracker crashed last time")
+            .setMessage(trace.take(3000))
+            .setPositiveButton("Copy") { _, _ ->
+                val clip = getSystemService(android.content.ClipboardManager::class.java)
+                clip.setPrimaryClip(android.content.ClipData.newPlainText("crash", trace))
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun scheduleBackgroundSync() {
