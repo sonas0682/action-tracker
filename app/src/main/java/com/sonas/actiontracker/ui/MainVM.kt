@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
@@ -24,7 +25,8 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainVM(app: Application) : AndroidViewModel(app) {
-    private val dao = Db.get(app).dao()
+    private val db = Db.get(app)
+    private val dao = db.dao()
 
     val suggested = dao.suggested().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val actions = dao.actions().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -46,20 +48,22 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         if (item.id == 0L) dao.insert(item) else dao.update(item)
     }
 
+    /** Ticks or un-ticks; a repeating action queues (or on un-tick drops) its next occurrence. */
     fun toggleDone(item: Item) = write {
-        val done = item.status != STATUS_DONE
-        dao.update(
-            item.copy(
-                status = if (done) STATUS_DONE else STATUS_OPEN,
-                completedAt = if (done) System.currentTimeMillis() else null
-            )
-        )
+        if (item.status == STATUS_DONE) Actions.reopen(db, item.id) else Actions.complete(db, item.id)
     }
 
-    fun delete(item: Item) = write { dao.delete(item) }
+    /**
+     * Swipe-delete. For an open repeating action only this occurrence goes and the next one
+     * is queued; that one is returned so Undo can take it back out.
+     */
+    suspend fun delete(item: Item): Item? = Actions.deleteOccurrence(db, item).also { afterWrite() }
 
-    /** Undo for a swipe-delete: puts the row back with its original id. */
-    fun restore(item: Item) = write { dao.insert(item) }
+    /** Undo for a swipe-delete: puts the row back with its original id and drops the occurrence it queued. */
+    fun restore(item: Item, queued: Item? = null) = write {
+        queued?.let { dao.delete(it) }
+        dao.insert(item)
+    }
 
     /**
      * Runs a database change, then redraws the home-screen widget so it never shows
@@ -67,6 +71,10 @@ class MainVM(app: Application) : AndroidViewModel(app) {
      */
     private fun write(block: suspend () -> Unit) = viewModelScope.launch {
         block()
+        afterWrite()
+    }
+
+    private suspend fun afterWrite() {
         runCatching { DueWidget.refresh(getApplication()) }
         runCatching { Backup.backUpSoon(getApplication()) }
     }

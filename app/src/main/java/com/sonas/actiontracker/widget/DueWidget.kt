@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import com.sonas.actiontracker.MainActivity
 import com.sonas.actiontracker.R
+import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.TimeOfDay
@@ -112,7 +113,7 @@ private val TomorrowParam = ActionParameters.Key<Boolean>("tomorrow")
 class MarkDoneAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val id = parameters[ItemIdKey] ?: return
-        Db.get(context).dao().markDone(id)
+        Actions.complete(Db.get(context), id)
         DueWidget.refresh(context)
     }
 }

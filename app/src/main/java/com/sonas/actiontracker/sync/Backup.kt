@@ -22,6 +22,7 @@ import com.sonas.actiontracker.data.DB_VERSION
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Processed
+import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.STATUS_SUGGESTED
@@ -186,7 +187,7 @@ object Backup {
                     .put("title", i.title).put("notes", i.notes).put("person", i.person)
                     .put("context", i.context).put("dueDate", i.dueDate).put("status", i.status)
                     .put("source", i.source).put("createdAt", i.createdAt).put("body", i.body)
-                    .put("timeOfDay", i.timeOfDay)
+                    .put("timeOfDay", i.timeOfDay).put("recurrence", i.recurrence)
                     .apply { i.completedAt?.let { put("completedAt", it) } }
             )
         }
@@ -237,7 +238,8 @@ object Backup {
             source = o.optString("source", "CUSTOM"), createdAt = o.optLong("createdAt", System.currentTimeMillis()),
             body = o.optString("body"),
             completedAt = if (o.has("completedAt") && !o.isNull("completedAt")) o.optLong("completedAt") else null,
-            timeOfDay = time ?: TimeOfDay.defaultFor(ctx).name
+            timeOfDay = time ?: TimeOfDay.defaultFor(ctx).name,
+            recurrence = Recurrence.of(o.optString("recurrence")).name
         )
     }
 
