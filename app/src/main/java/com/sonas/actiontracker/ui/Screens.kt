@@ -82,7 +82,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -96,6 +103,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -119,6 +127,7 @@ import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.sync.Reminders
 import java.time.LocalDate
 import java.time.LocalTime
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
 enum class Group(val label: String) { DATE("Date"), PERSON("Person"), CONTEXT("Context") }
@@ -255,6 +264,18 @@ fun AppScreen(
     var editing by remember { mutableStateOf<Item?>(null) }
     var pickingTime by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deleteWithUndo: (Item) -> Unit = { item ->
+        vm.delete(item)
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val result = snackbar.showSnackbar(
+                "Deleted \"${item.title}\"", actionLabel = "Undo", duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) vm.restore(item)
+        }
+    }
     vm.message?.let { lastMessage = it }
     val open = actions.filter { it.status == STATUS_OPEN }
 
@@ -293,7 +314,7 @@ fun AppScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
                 if (tab == TAB_ACTIONS) {
-                    ActionsList(actions, group, vm = vm, onEdit = { editing = it })
+                    ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
                 } else {
                     SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
                 }
@@ -302,6 +323,10 @@ fun AppScreen(
         NewActionFab(
             onClick = { editing = Item.blank() },
             modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
+        )
+        SnackbarHost(
+            snackbar,
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 92.dp, bottom = 16.dp)
         )
     }
 
@@ -781,7 +806,8 @@ private fun ActionsList(
     actions: List<Item>,
     group: Group,
     vm: MainVM,
-    onEdit: (Item) -> Unit
+    onEdit: (Item) -> Unit,
+    onDelete: (Item) -> Unit
 ) {
     val open = actions.filter { it.status == STATUS_OPEN }
     val done = actions.filter { it.status == STATUS_DONE }
@@ -819,7 +845,7 @@ private fun ActionsList(
                     item, group,
                     onToggle = { vm.toggleDone(item) },
                     onEdit = { onEdit(item) },
-                    onDelete = { vm.delete(item) },
+                    onDelete = { onDelete(item) },
                     modifier = Modifier.animateItem()
                 )
             }
@@ -859,47 +885,66 @@ private fun ActionRow(
     modifier: Modifier = Modifier
 ) {
     val isDone = item.status == STATUS_DONE
-    Row(
-        modifier.fillMaxWidth()
-            .glass(ROW_SHAPE)
-            .clickable(onClick = onEdit)
-            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        GlowCheck(isDone, onToggle)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                item.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (isDone) Fresh.TextDim else Fresh.Text,
-                textDecoration = if (isDone) TextDecoration.LineThrough else null,
-                maxLines = 2, overflow = TextOverflow.Ellipsis
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PersonAvatar(item.person, 16.dp)
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (group == Group.DATE && !isDone) shortDue(item.dueDate) else dateLabel(item.dueDate),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = dueColor(item.dueDate, isDone)
-                )
-                val rest = buildList {
-                    if (group != Group.PERSON) add(item.person)
-                    if (group != Group.CONTEXT) add(item.context)
-                }
-                if (rest.isNotEmpty()) {
-                    Text(
-                        rest.joinToString(prefix = "  ·  ", separator = "  ·  "),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Fresh.TextDim,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                }
+    // Swipe either way past the threshold to delete; the list's animateItem() closes the gap.
+    val swipe = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value != SwipeToDismissBoxValue.Settled) onDelete()
+            value != SwipeToDismissBoxValue.Settled
+        }
+    )
+    SwipeToDismissBox(
+        state = swipe,
+        modifier = modifier,
+        backgroundContent = {
+            val toStart = swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart
+            Box(
+                Modifier.fillMaxSize().clip(ROW_SHAPE).background(Fresh.Coral.copy(alpha = 0.9f))
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (toStart) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
             }
         }
-        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Delete, "Delete", tint = Fresh.TextDim, modifier = Modifier.size(20.dp))
+    ) {
+        Row(
+            Modifier.fillMaxWidth()
+                .glass(ROW_SHAPE)
+                .clickable(onClick = onEdit)
+                .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            GlowCheck(isDone, onToggle)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (isDone) Fresh.TextDim else Fresh.Text,
+                    textDecoration = if (isDone) TextDecoration.LineThrough else null,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PersonAvatar(item.person, 16.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (group == Group.DATE && !isDone) shortDue(item.dueDate) else dateLabel(item.dueDate),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = dueColor(item.dueDate, isDone)
+                    )
+                    val rest = buildList {
+                        if (group != Group.PERSON) add(item.person)
+                        if (group != Group.CONTEXT) add(item.context)
+                    }
+                    if (rest.isNotEmpty()) {
+                        Text(
+                            rest.joinToString(prefix = "  ·  ", separator = "  ·  "),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Fresh.TextDim,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
         }
     }
 }
