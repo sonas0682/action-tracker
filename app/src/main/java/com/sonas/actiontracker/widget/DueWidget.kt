@@ -240,10 +240,9 @@ private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
                     Spacer(GlanceModifier.width(4.dp))
                     Chip("${overdueDays}d late", W.CoralSoft, W.Coral)
                 }
-                if (item.person != "Me") {
-                    Spacer(GlanceModifier.width(4.dp))
-                    Chip(item.person, if (accent == W.Teal) W.TealSoft else W.IndigoSoft, accent)
-                }
+                // Every action shows its person, "Me" included, so the rows line up.
+                Spacer(GlanceModifier.width(4.dp))
+                Chip(item.person, if (accent == W.Teal) W.TealSoft else W.IndigoSoft, accent)
                 Spacer(GlanceModifier.width(4.dp))
                 Chip(item.context, W.Grey, W.TextDim)
             }
