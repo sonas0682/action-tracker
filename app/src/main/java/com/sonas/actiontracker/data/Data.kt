@@ -48,7 +48,9 @@ data class Item(
      * Full email text waiting for an on-device Gemini Nano title pass. Cleared once
      * the pass has run, so each suggestion is summarized at most once.
      */
-    val body: String = ""
+    val body: String = "",
+    /** When the action was marked done (epoch millis), or null. Filled in by the calendar/stats work. */
+    val completedAt: Long? = null
 ) {
     companion object {
         fun blank() = Item(
@@ -120,7 +122,7 @@ interface ItemDao {
     suspend fun markProcessed(p: Processed)
 }
 
-@Database(entities = [Item::class, Processed::class], version = 2, exportSchema = false)
+@Database(entities = [Item::class, Processed::class], version = 3, exportSchema = false)
 abstract class Db : RoomDatabase() {
     abstract fun dao(): ItemDao
 
@@ -137,13 +139,20 @@ abstract class Db : RoomDatabase() {
             val factory = SupportOpenHelperFactory(DbKey.passphrase(context))
             return Room.databaseBuilder(context, Db::class.java, "tracker.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE items ADD COLUMN body TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        // Same as the calendar/stats branch, so APKs from either branch open each other's database.
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN completedAt INTEGER")
             }
         }
     }
