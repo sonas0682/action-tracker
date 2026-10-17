@@ -52,6 +52,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
 
     fun delete(item: Item) = write { dao.delete(item) }
 
+    /** Undo for a swipe-delete: puts the row back with its original id. */
+    fun restore(item: Item) = write { dao.insert(item) }
+
     /** Runs a database change, then redraws the home-screen widget so it never shows stale actions. */
     private fun write(block: suspend () -> Unit) = viewModelScope.launch {
         block()
