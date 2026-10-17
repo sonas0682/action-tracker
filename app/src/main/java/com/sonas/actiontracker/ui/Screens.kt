@@ -354,7 +354,7 @@ fun AppScreen(
 }
 
 /**
- * One slim bar: tabs, group-by (Actions only), sync and menu, plus a one-line date/due strip.
+ * One slim bar: tabs, group-by (Actions only), sync and menu, plus a one-line stats strip.
  * On wide windows (landscape) the strip moves into the same row so the bar is a single line.
  */
 @Composable
@@ -379,7 +379,7 @@ private fun TopBar(
                 )
                 if (wide) {
                     Spacer(Modifier.width(16.dp))
-                    DueStrip(open, Modifier.weight(1f))
+                    StatsStrip(open, inbox = counts[1], Modifier.weight(1f))
                 }
                 if (tab == TAB_ACTIONS) {
                     Spacer(Modifier.width(6.dp))
@@ -390,37 +390,36 @@ private fun TopBar(
                 Spacer(Modifier.width(4.dp))
                 menu()
             }
-            if (!wide) DueStrip(open, Modifier.padding(start = 8.dp, top = 4.dp))
+            if (!wide) StatsStrip(open, inbox = counts[1], Modifier.fillMaxWidth().padding(top = 6.dp, end = 4.dp))
         }
     }
 }
 
-/** "FRI, OCT 17 · 2 late · 3 today" in one small line. */
+/** The four stats (late, today, open, inbox) as small one-line glass pills. */
 @Composable
-private fun DueStrip(open: List<Item>, modifier: Modifier = Modifier) {
+private fun StatsStrip(open: List<Item>, inbox: Int, modifier: Modifier = Modifier) {
     val t = today()
     val overdue = open.count { it.dueDate < t }
     val dueToday = open.count { it.dueDate == t }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(Fresh.accent))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, MMM d")).uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = Fresh.TextDim,
-            maxLines = 1
-        )
-        if (overdue > 0) {
-            Text(" · ", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
-            Text("$overdue late", style = MaterialTheme.typography.labelSmall, color = Fresh.Coral, maxLines = 1)
-        }
-        Text(" · ", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
-        Text(
-            if (dueToday > 0) "$dueToday today" else "nothing due today",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (dueToday > 0) Fresh.Sky else Fresh.TextDim,
-            maxLines = 1
-        )
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        MiniStat("Late", overdue, if (overdue > 0) Fresh.Coral else Fresh.Text, Modifier.weight(1f))
+        MiniStat("Today", dueToday, Fresh.Sky, Modifier.weight(1f))
+        MiniStat("Open", open.size, Fresh.Text, Modifier.weight(1f))
+        MiniStat("Inbox", inbox, Fresh.Teal, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun MiniStat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
+    val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
+    Row(
+        modifier.height(30.dp).glass(PILL).padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("${shown.toInt()}", style = MaterialTheme.typography.titleSmall, color = color, maxLines = 1)
+        Spacer(Modifier.width(5.dp))
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim, maxLines = 1)
     }
 }
 
@@ -896,13 +895,17 @@ private fun ActionRow(
         state = swipe,
         modifier = modifier,
         backgroundContent = {
-            val toStart = swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart
-            Box(
-                Modifier.fillMaxSize().clip(ROW_SHAPE).background(Fresh.Coral.copy(alpha = 0.9f))
-                    .padding(horizontal = 20.dp),
-                contentAlignment = if (toStart) Alignment.CenterEnd else Alignment.CenterStart
-            ) {
-                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
+            // Only paint while a swipe is in progress: the glass row is translucent, so a
+            // resting red layer would tint every row and show the trash icon through it.
+            val direction = swipe.dismissDirection
+            if (direction != SwipeToDismissBoxValue.Settled) {
+                Box(
+                    Modifier.fillMaxSize().clip(ROW_SHAPE).background(Fresh.Coral.copy(alpha = 0.9f))
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = if (direction == SwipeToDismissBoxValue.EndToStart) Alignment.CenterEnd else Alignment.CenterStart
+                ) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
+                }
             }
         }
     ) {
