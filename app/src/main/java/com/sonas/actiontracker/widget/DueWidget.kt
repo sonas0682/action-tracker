@@ -1,14 +1,14 @@
 package com.sonas.actiontracker.widget
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -27,10 +27,8 @@ import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
-import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -42,12 +40,13 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.state.GlanceStateDefinition
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import com.sonas.actiontracker.MainActivity
 import com.sonas.actiontracker.R
 import com.sonas.actiontracker.data.Db
@@ -61,16 +60,16 @@ import java.time.format.DateTimeFormatter
  * circle to mark an action done, tap anything else to open the app.
  */
 class DueWidget : GlanceAppWidget() {
-    override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
-
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val dao = Db.get(context).dao()
         val today = LocalDate.now().toEpochDay()
         val initial = dao.openDueBy(today + 1)
         provideContent {
             // Room's Flow keeps the widget live while its session is running.
-            val items by dao.openDueByFlow(today + 1).collectAsState(initial)
-            val showTomorrow = currentState<Preferences>()[ShowTomorrowKey] ?: false
+            val itemsFlow = remember { dao.openDueByFlow(today + 1) }
+            val dayFlow = remember { DayChoice.flow(context) }
+            val items by itemsFlow.collectAsState(initial)
+            val showTomorrow by dayFlow.collectAsState(DayChoice.showTomorrow(context))
             Content(items, today, showTomorrow)
         }
     }
@@ -85,7 +84,26 @@ class DueWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = DueWidget()
 }
 
-private val ShowTomorrowKey = booleanPreferencesKey("show_tomorrow")
+/** Which day the widget lists, kept in plain SharedPreferences so the widget needs no DataStore. */
+private object DayChoice {
+    private const val PREFS = "widget"
+    private const val KEY = "show_tomorrow"
+
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun showTomorrow(context: Context) = prefs(context).getBoolean(KEY, false)
+
+    fun set(context: Context, tomorrow: Boolean) = prefs(context).edit().putBoolean(KEY, tomorrow).apply()
+
+    fun flow(context: Context): Flow<Boolean> = callbackFlow {
+        val p = prefs(context)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == KEY) trySend(sp.getBoolean(KEY, false))
+        }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+}
 private val ItemIdKey = ActionParameters.Key<Long>("item_id")
 private val TomorrowParam = ActionParameters.Key<Boolean>("tomorrow")
 
@@ -101,8 +119,8 @@ class MarkDoneAction : ActionCallback {
 class SelectDayAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val tomorrow = parameters[TomorrowParam] ?: false
-        updateAppWidgetState(context, glanceId) { it[ShowTomorrowKey] = tomorrow }
-        DueWidget().update(context, glanceId)
+        DayChoice.set(context, tomorrow)
+        DueWidget.refresh(context)
     }
 }
 
@@ -240,10 +258,9 @@ private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
                     Spacer(GlanceModifier.width(4.dp))
                     Chip("${overdueDays}d late", W.CoralSoft, W.Coral)
                 }
-                if (item.person != "Me") {
-                    Spacer(GlanceModifier.width(4.dp))
-                    Chip(item.person, if (accent == W.Teal) W.TealSoft else W.IndigoSoft, accent)
-                }
+                // Every action shows its person, "Me" included, so the rows line up.
+                Spacer(GlanceModifier.width(4.dp))
+                Chip(item.person, if (accent == W.Teal) W.TealSoft else W.IndigoSoft, accent)
                 Spacer(GlanceModifier.width(4.dp))
                 Chip(item.context, W.Grey, W.TextDim)
             }

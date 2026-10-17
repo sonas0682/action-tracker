@@ -72,7 +72,6 @@ dependencies {
 
     // Home-screen widget
     implementation("androidx.glance:glance-appwidget:1.1.1")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // On-device Gemini Nano (ML Kit GenAI) for cleaner email suggestion titles
     implementation("com.google.mlkit:genai-summarization:1.0.0-beta1")
