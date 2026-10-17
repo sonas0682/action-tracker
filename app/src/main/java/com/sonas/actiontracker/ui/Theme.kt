@@ -15,7 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -32,63 +32,62 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * "Midnight" palette: near-black canvas, a violet → magenta → amber accent gradient,
- * electric cyan for "today", and translucent glass surfaces.
+ * "Fresh" palette: airy off-white canvas, an indigo → sky → teal accent gradient,
+ * soft pastel glows and white glass surfaces.
  */
-object Midnight {
-    val Canvas = Color(0xFF0A0A12)
-    val Violet = Color(0xFF8B5CFF)
-    val Magenta = Color(0xFFFF4FB8)
-    val Amber = Color(0xFFFFB547)
-    val Cyan = Color(0xFF3EE6FF)
-    val Lime = Color(0xFFB8FF5C)
-    val Coral = Color(0xFFFF6B6B)
-    val Text = Color(0xFFF4F2FF)
-    val TextDim = Color(0xFFA3A0BF)
-    val Glass = Color(0x14FFFFFF)
-    val GlassStrong = Color(0x24FFFFFF)
-    val Rim = Color(0x1FFFFFFF)
+object Fresh {
+    val Canvas = Color(0xFFF6F7FC)
+    val Indigo = Color(0xFF5B5FEF)
+    val Teal = Color(0xFF12B5A6)
+    val Amber = Color(0xFFD98200)
+    val Sky = Color(0xFF1E90E8)
+    val Green = Color(0xFF16A36A)
+    val Coral = Color(0xFFE5484D)
+    val Text = Color(0xFF1B1D33)
+    val TextDim = Color(0xFF6A6E8C)
+    val Glass = Color(0xCCFFFFFF)
+    val GlassStrong = Color(0xFFFFFFFF)
+    val Rim = Color(0x1A1B1D33)
 
-    val accent: Brush get() = Brush.linearGradient(listOf(Violet, Magenta, Amber))
-    val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Violet, Magenta, Amber))
-    val rim: Brush get() = Brush.linearGradient(listOf(Color(0x40FFFFFF), Color(0x08FFFFFF), Color(0x26FFFFFF)))
+    val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
+    val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))
 }
 
-private val MidnightColors = darkColorScheme(
-    primary = Midnight.Violet,
+private val FreshColors = lightColorScheme(
+    primary = Fresh.Indigo,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF2A1F55),
-    onPrimaryContainer = Color(0xFFE6DDFF),
-    secondary = Midnight.Magenta,
+    primaryContainer = Color(0xFFE1E2FF),
+    onPrimaryContainer = Color(0xFF14165E),
+    secondary = Fresh.Teal,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF3A1838),
-    onSecondaryContainer = Color(0xFFFFD8EE),
-    tertiary = Midnight.Cyan,
-    onTertiary = Color(0xFF00222A),
-    tertiaryContainer = Color(0xFF0D3640),
-    onTertiaryContainer = Color(0xFFC8F6FF),
-    error = Midnight.Coral,
-    onError = Color(0xFF2A0000),
-    errorContainer = Color(0xFF4A1518),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Midnight.Canvas,
-    onBackground = Midnight.Text,
-    surface = Midnight.Canvas,
-    onSurface = Midnight.Text,
-    surfaceVariant = Color(0xFF221F33),
-    onSurfaceVariant = Midnight.TextDim,
-    outline = Color(0xFF4A4763),
-    outlineVariant = Color(0xFF2C2940),
-    inverseSurface = Midnight.Text,
-    inverseOnSurface = Midnight.Canvas,
-    inversePrimary = Color(0xFF5B34D6),
-    surfaceDim = Midnight.Canvas,
-    surfaceBright = Color(0xFF2A2740),
-    surfaceContainerLowest = Color(0xFF07070D),
-    surfaceContainerLow = Color(0xFF12111D),
-    surfaceContainer = Color(0xFF181726),
-    surfaceContainerHigh = Color(0xFF1F1D30),
-    surfaceContainerHighest = Color(0xFF28263B),
+    secondaryContainer = Color(0xFFD3F5F0),
+    onSecondaryContainer = Color(0xFF00201C),
+    tertiary = Fresh.Sky,
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFD6EBFF),
+    onTertiaryContainer = Color(0xFF00213A),
+    error = Fresh.Coral,
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD8),
+    onErrorContainer = Color(0xFF410006),
+    background = Fresh.Canvas,
+    onBackground = Fresh.Text,
+    surface = Fresh.Canvas,
+    onSurface = Fresh.Text,
+    surfaceVariant = Color(0xFFE6E7F2),
+    onSurfaceVariant = Fresh.TextDim,
+    outline = Color(0xFF9396B0),
+    outlineVariant = Color(0xFFD5D7E6),
+    inverseSurface = Fresh.Text,
+    inverseOnSurface = Fresh.Canvas,
+    inversePrimary = Color(0xFFBEC1FF),
+    surfaceDim = Color(0xFFDDDFEC),
+    surfaceBright = Color.White,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF9FAFE),
+    surfaceContainer = Color(0xFFF1F2F9),
+    surfaceContainerHigh = Color(0xFFEBECF5),
+    surfaceContainerHighest = Color(0xFFE5E7F1),
 )
 
 private val base = Typography()
@@ -117,17 +116,17 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp),
 )
 
-/** Dark-first Midnight theme. Dialogs, sheets and pickers pick it up through MaterialTheme. */
+/** Light Fresh theme. Dialogs, sheets and pickers pick it up through MaterialTheme. */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = MidnightColors, typography = AppTypography, shapes = AppShapes, content = content)
+    MaterialTheme(colorScheme = FreshColors, typography = AppTypography, shapes = AppShapes, content = content)
 }
 
 /** Frosted-glass surface: a faint white tint with a light rim, like a pane over the aurora. */
 fun Modifier.glass(shape: Shape, strong: Boolean = false): Modifier =
     this.clip(shape)
-        .background(if (strong) Midnight.GlassStrong else Midnight.Glass)
-        .border(1.dp, Midnight.rim, shape)
+        .background(if (strong) Fresh.GlassStrong else Fresh.Glass)
+        .border(1.dp, Fresh.Rim, shape)
 
 /** Full-screen canvas with slowly drifting violet, magenta and cyan glows behind the content. */
 @Composable
@@ -141,7 +140,7 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable BoxScop
     Box(
         modifier
             .fillMaxSize()
-            .background(Midnight.Canvas)
+            .background(Fresh.Canvas)
             .drawBehind {
                 val w = size.width
                 val h = size.height
@@ -149,9 +148,9 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable BoxScop
                     Brush.radialGradient(listOf(color, Color.Transparent), center = Offset(cx, cy), radius = r),
                     radius = r, center = Offset(cx, cy)
                 )
-                glow(Midnight.Violet.copy(alpha = 0.40f), w * (0.15f + 0.10f * cos(t)), h * (0.08f + 0.04f * sin(t)), w * 0.85f)
-                glow(Midnight.Magenta.copy(alpha = 0.26f), w * (0.95f + 0.08f * sin(t)), h * (0.22f + 0.05f * cos(t)), w * 0.70f)
-                glow(Midnight.Cyan.copy(alpha = 0.12f), w * (0.30f + 0.12f * sin(t * 2)), h * (0.92f + 0.03f * cos(t)), w * 0.80f)
+                glow(Fresh.Indigo.copy(alpha = 0.16f), w * (0.15f + 0.10f * cos(t)), h * (0.08f + 0.04f * sin(t)), w * 0.85f)
+                glow(Fresh.Teal.copy(alpha = 0.14f), w * (0.95f + 0.08f * sin(t)), h * (0.22f + 0.05f * cos(t)), w * 0.70f)
+                glow(Fresh.Sky.copy(alpha = 0.12f), w * (0.30f + 0.12f * sin(t * 2)), h * (0.92f + 0.03f * cos(t)), w * 0.80f)
             },
         content = content
     )

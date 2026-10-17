@@ -57,6 +57,6 @@ Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometr
 
 ## Look and feel
 
-Dark-first "Midnight" theme: near-black canvas with slowly drifting violet/magenta/cyan glows,
-a violet → magenta → amber accent gradient, frosted-glass cards, big expressive headings, a
+Light "Fresh" theme: airy off-white canvas with slowly drifting pastel glows,
+an indigo → sky → teal accent gradient, white glass cards, big expressive headings, a
 summary header (late / today / open / inbox), a sliding gradient tab switcher and a glowing New button.

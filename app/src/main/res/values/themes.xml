@@ -1,7 +1,7 @@
 <resources>
-    <!-- Dark-first: the app always draws its own "Midnight" theme (see ui/Theme.kt). -->
-    <style name="Theme.ActionTracker" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/midnight</item>
+    <!-- Always light: the app draws its own "Fresh" theme (see ui/Theme.kt). -->
+    <style name="Theme.ActionTracker" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/canvas</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>

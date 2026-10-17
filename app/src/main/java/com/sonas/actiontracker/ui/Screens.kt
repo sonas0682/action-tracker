@@ -154,11 +154,11 @@ private fun shortDue(epochDay: Long): String {
 private fun dueColor(epochDay: Long, done: Boolean = false): Color {
     val diff = epochDay - today()
     return when {
-        done -> Midnight.TextDim
-        diff < 0 -> Midnight.Coral
-        diff == 0L -> Midnight.Cyan
-        diff == 1L -> Midnight.Amber
-        else -> Midnight.TextDim
+        done -> Fresh.TextDim
+        diff < 0 -> Fresh.Coral
+        diff == 0L -> Fresh.Sky
+        diff == 1L -> Fresh.Amber
+        else -> Fresh.TextDim
     }
 }
 
@@ -169,9 +169,9 @@ private fun sourceIcon(source: String): ImageVector = when (source) {
 }
 
 private fun sourceColor(source: String): Color = when (source) {
-    "GMAIL" -> Midnight.Magenta
-    "CALENDAR" -> Midnight.Cyan
-    else -> Midnight.Violet
+    "GMAIL" -> Fresh.Teal
+    "CALENDAR" -> Fresh.Sky
+    else -> Fresh.Indigo
 }
 
 private fun contextIcon(context: String): ImageVector = when (context.lowercase()) {
@@ -182,10 +182,10 @@ private fun contextIcon(context: String): ImageVector = when (context.lowercase(
 }
 
 private fun personColor(name: String): Color = when (Math.floorMod(name.hashCode(), 4)) {
-    0 -> Midnight.Violet
-    1 -> Midnight.Magenta
-    2 -> Midnight.Cyan
-    else -> Midnight.Amber
+    0 -> Fresh.Indigo
+    1 -> Fresh.Teal
+    2 -> Fresh.Sky
+    else -> Fresh.Amber
 }
 
 private fun greeting(): String = when (LocalTime.now().hour) {
@@ -208,9 +208,9 @@ fun LockScreen(onUnlock: () -> Unit) {
         Box(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 28.dp, vertical = 24.dp)) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(132.dp).scale(ring).clip(CircleShape).background(Midnight.Violet.copy(alpha = 0.18f)))
+                    Box(Modifier.size(132.dp).scale(ring).clip(CircleShape).background(Fresh.Indigo.copy(alpha = 0.18f)))
                     Box(
-                        Modifier.size(100.dp).clip(CircleShape).background(Midnight.accent),
+                        Modifier.size(100.dp).clip(CircleShape).background(Fresh.accent),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Rounded.Lock, null, tint = Color.White, modifier = Modifier.size(44.dp))
@@ -219,7 +219,7 @@ fun LockScreen(onUnlock: () -> Unit) {
                 Spacer(Modifier.height(36.dp))
                 Text("Action\nTracker", style = MaterialTheme.typography.displayMedium, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(10.dp))
-                Text("Locked to keep your actions private.", color = Midnight.TextDim, textAlign = TextAlign.Center)
+                Text("Locked to keep your actions private.", color = Fresh.TextDim, textAlign = TextAlign.Center)
             }
             GradientButton(
                 "Unlock", Icons.Rounded.Lock, onUnlock,
@@ -319,12 +319,12 @@ private fun Header(open: List<Item>, inbox: Int, syncing: Boolean, onSync: () ->
     val dueToday = open.count { it.dueDate == t }
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(Midnight.accent))
+            Box(Modifier.size(10.dp).clip(CircleShape).background(Fresh.accent))
             Spacer(Modifier.width(8.dp))
             Text(
                 LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE · MMM d")).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = Midnight.TextDim,
+                color = Fresh.TextDim,
                 modifier = Modifier.weight(1f)
             )
             SyncButton(syncing, onSync)
@@ -332,7 +332,7 @@ private fun Header(open: List<Item>, inbox: Int, syncing: Boolean, onSync: () ->
             menu()
         }
         Spacer(Modifier.height(6.dp))
-        Text(greeting(), style = MaterialTheme.typography.titleMedium, color = Midnight.TextDim)
+        Text(greeting(), style = MaterialTheme.typography.titleMedium, color = Fresh.TextDim)
         Text(
             when {
                 open.isEmpty() && inbox == 0 -> "All clear."
@@ -341,15 +341,15 @@ private fun Header(open: List<Item>, inbox: Int, syncing: Boolean, onSync: () ->
                 open.isEmpty() -> "Inbox waiting."
                 else -> "You're ahead."
             },
-            style = MaterialTheme.typography.displaySmall.copy(brush = Midnight.accentHorizontal),
+            style = MaterialTheme.typography.displaySmall.copy(brush = Fresh.accentHorizontal),
             maxLines = 1
         )
         Spacer(Modifier.height(14.dp))
         Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("Late", overdue, if (overdue > 0) Midnight.Coral else Midnight.Text, Modifier.weight(1f))
-            StatTile("Today", dueToday, Midnight.Cyan, Modifier.weight(1f))
-            StatTile("Open", open.size, Midnight.Text, Modifier.weight(1f))
-            StatTile("Inbox", inbox, Midnight.Magenta, Modifier.weight(1f))
+            StatTile("Late", overdue, if (overdue > 0) Fresh.Coral else Fresh.Text, Modifier.weight(1f))
+            StatTile("Today", dueToday, Fresh.Sky, Modifier.weight(1f))
+            StatTile("Open", open.size, Fresh.Text, Modifier.weight(1f))
+            StatTile("Inbox", inbox, Fresh.Teal, Modifier.weight(1f))
         }
         Spacer(Modifier.height(14.dp))
     }
@@ -364,7 +364,7 @@ private fun StatTile(label: String, value: Int, color: Color, modifier: Modifier
             style = MaterialTheme.typography.headlineMedium,
             color = color
         )
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Midnight.TextDim)
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
     }
 }
 
@@ -388,7 +388,7 @@ private fun SyncButton(syncing: Boolean, onSync: () -> Unit) {
         Icon(
             Icons.Rounded.Refresh,
             contentDescription = if (syncing) "Syncing" else "Sync",
-            tint = if (syncing) Midnight.Cyan else Midnight.Text,
+            tint = if (syncing) Fresh.Sky else Fresh.Text,
             modifier = Modifier.size(22.dp).then(if (syncing) Modifier.rotate(angle) else Modifier)
         )
     }
@@ -405,7 +405,7 @@ private fun MoreMenu(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        GlassIconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Midnight.Text) }
+        GlassIconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Fresh.Text) }
         DropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
@@ -443,11 +443,11 @@ private fun TabSwitcher(tab: Int, labels: List<String>, counts: List<Int>, onSel
     ) {
         val segment = maxWidth / labels.size
         val x by animateDpAsState(segment * tab, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow), label = "tab")
-        Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Midnight.accentHorizontal))
+        Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Fresh.accentHorizontal))
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { i, label ->
                 val selected = tab == i
-                val fg by animateColorAsState(if (selected) Color.White else Midnight.TextDim, label = "fg")
+                val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "fg")
                 Row(
                     Modifier.weight(1f).fillMaxHeight().clip(PILL).clickable { onSelect(i) },
                     horizontalArrangement = Arrangement.Center,
@@ -457,7 +457,7 @@ private fun TabSwitcher(tab: Int, labels: List<String>, counts: List<Int>, onSel
                     if (counts[i] > 0) {
                         Spacer(Modifier.width(6.dp))
                         Box(
-                            Modifier.clip(PILL).background(if (selected) Color(0x33FFFFFF) else Midnight.Glass)
+                            Modifier.clip(PILL).background(if (selected) Color(0x33FFFFFF) else Fresh.Glass)
                                 .padding(horizontal = 7.dp, vertical = 1.dp)
                         ) {
                             Text("${counts[i]}", style = MaterialTheme.typography.labelMedium, color = fg)
@@ -478,9 +478,9 @@ private fun NewActionFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         label = "halo"
     )
     Box(modifier, contentAlignment = Alignment.Center) {
-        Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(PILL).background(Midnight.Magenta.copy(alpha = halo * 0.35f)))
+        Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(PILL).background(Fresh.Teal.copy(alpha = halo * 0.35f)))
         Row(
-            Modifier.clip(PILL).background(Midnight.accent).clickable(onClick = onClick)
+            Modifier.clip(PILL).background(Fresh.accent).clickable(onClick = onClick)
                 .padding(horizontal = 22.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -495,13 +495,13 @@ private fun NewActionFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
 private fun GradientButton(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     Row(
         modifier.clip(PILL)
-            .background(if (enabled) Midnight.accentHorizontal else Brush.linearGradient(listOf(Midnight.Glass, Midnight.Glass)))
+            .background(if (enabled) Fresh.accentHorizontal else Brush.linearGradient(listOf(Fresh.Glass, Fresh.Glass)))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val fg = if (enabled) Color.White else Midnight.TextDim
+        val fg = if (enabled) Color.White else Fresh.TextDim
         if (icon != null) {
             Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -530,10 +530,10 @@ private fun MessageBanner(text: String, onClose: () -> Unit) {
             .padding(start = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Rounded.Info, null, tint = Midnight.Cyan, modifier = Modifier.size(18.dp))
+        Icon(Icons.Rounded.Info, null, tint = Fresh.Sky, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Dismiss message", Modifier.size(18.dp), tint = Midnight.TextDim) }
+        IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Dismiss message", Modifier.size(18.dp), tint = Fresh.TextDim) }
     }
 }
 
@@ -552,7 +552,7 @@ private fun EmptyState(icon: ImageVector, title: String, body: String, action: (
     ) {
         Spacer(Modifier.height(32.dp))
         Box(
-            Modifier.offset(y = dy.dp).size(92.dp).clip(RoundedCornerShape(30.dp)).background(Midnight.accent),
+            Modifier.offset(y = dy.dp).size(92.dp).clip(RoundedCornerShape(30.dp)).background(Fresh.accent),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(42.dp))
@@ -560,7 +560,7 @@ private fun EmptyState(icon: ImageVector, title: String, body: String, action: (
         Spacer(Modifier.height(24.dp))
         Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = Midnight.TextDim, textAlign = TextAlign.Center)
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim, textAlign = TextAlign.Center)
         if (action != null) {
             Spacer(Modifier.height(22.dp))
             action()
@@ -593,13 +593,13 @@ private fun SuggestedList(items: List<Item>, vm: MainVM, onEdit: (Item) -> Unit,
                 Text(
                     "${items.size} TO REVIEW",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Midnight.TextDim,
+                    color = Fresh.TextDim,
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = { vm.confirmAll(items) }) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Midnight.Lime)
+                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Fresh.Green)
                     Spacer(Modifier.width(4.dp))
-                    Text("Add all", color = Midnight.Lime, style = MaterialTheme.typography.labelLarge)
+                    Text("Add all", color = Fresh.Green, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -659,17 +659,17 @@ private fun SuggestionRow(
                     Text(
                         "  ·  ${item.person}  ·  ${item.context}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Midnight.TextDim,
+                        color = Fresh.TextDim,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Rounded.Close, "Dismiss", tint = Midnight.TextDim, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Close, "Dismiss", tint = Fresh.TextDim, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(2.dp))
             Box(
-                Modifier.size(34.dp).clip(CircleShape).background(Midnight.accent).clickable(onClick = onAdd),
+                Modifier.size(34.dp).clip(CircleShape).background(Fresh.accent).clickable(onClick = onAdd),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Rounded.Check, "Add", tint = Color.White, modifier = Modifier.size(18.dp))
@@ -680,7 +680,7 @@ private fun SuggestionRow(
                 if (item.notes.isNotBlank()) {
                     Text(
                         item.notes, maxLines = 4, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall, color = Midnight.TextDim
+                        style = MaterialTheme.typography.bodySmall, color = Fresh.TextDim
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -734,7 +734,7 @@ private fun ActionsList(
     ) {
         item(key = "group") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("GROUP BY", style = MaterialTheme.typography.labelSmall, color = Midnight.TextDim)
+                Text("GROUP BY", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
                 Spacer(Modifier.width(2.dp))
                 Group.entries.forEach { g -> GroupChip(g.label, group == g) { onGroup(g) } }
             }
@@ -746,7 +746,7 @@ private fun ActionsList(
                     Text(
                         "Tap New to add one, or review Suggested.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Midnight.TextDim
+                        color = Fresh.TextDim
                     )
                 }
             }
@@ -770,10 +770,10 @@ private fun ActionsList(
 
 @Composable
 private fun GroupChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val fg by animateColorAsState(if (selected) Color.White else Midnight.TextDim, label = "chip")
+    val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "chip")
     Box(
         Modifier.clip(PILL)
-            .then(if (selected) Modifier.background(Midnight.accentHorizontal) else Modifier.glass(PILL))
+            .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier.glass(PILL))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp)
     ) {
@@ -784,12 +784,12 @@ private fun GroupChip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modifier = Modifier) {
     val accent = when {
-        label == "Done" -> Midnight.TextDim
-        group == Group.DATE && label == "Overdue" -> Midnight.Coral
-        group == Group.DATE && label == "Today" -> Midnight.Cyan
-        group == Group.DATE && label == "Tomorrow" -> Midnight.Amber
+        label == "Done" -> Fresh.TextDim
+        group == Group.DATE && label == "Overdue" -> Fresh.Coral
+        group == Group.DATE && label == "Today" -> Fresh.Sky
+        group == Group.DATE && label == "Tomorrow" -> Fresh.Amber
         group == Group.PERSON -> personColor(label)
-        else -> Midnight.Violet
+        else -> Fresh.Indigo
     }
     Row(
         modifier.fillMaxWidth().padding(start = 4.dp, top = 14.dp, bottom = 2.dp),
@@ -799,7 +799,7 @@ private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modif
         Spacer(Modifier.width(10.dp))
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp), color = accent)
         Spacer(Modifier.width(8.dp))
-        Text("$count", style = MaterialTheme.typography.labelMedium, color = Midnight.TextDim)
+        Text("$count", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
     }
 }
 
@@ -826,7 +826,7 @@ private fun ActionRow(
             Text(
                 item.title,
                 style = MaterialTheme.typography.titleSmall,
-                color = if (isDone) Midnight.TextDim else Midnight.Text,
+                color = if (isDone) Fresh.TextDim else Fresh.Text,
                 textDecoration = if (isDone) TextDecoration.LineThrough else null,
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
@@ -846,14 +846,14 @@ private fun ActionRow(
                     Text(
                         rest.joinToString(prefix = "  ·  ", separator = "  ·  "),
                         style = MaterialTheme.typography.labelMedium,
-                        color = Midnight.TextDim,
+                        color = Fresh.TextDim,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Delete, "Delete", tint = Midnight.TextDim, modifier = Modifier.size(20.dp))
+            Icon(Icons.Outlined.Delete, "Delete", tint = Fresh.TextDim, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -869,8 +869,8 @@ private fun GlowCheck(checked: Boolean, onToggle: () -> Unit) {
     Box(
         Modifier.size(26.dp).scale(pop).clip(CircleShape)
             .then(
-                if (checked) Modifier.background(Midnight.accent)
-                else Modifier.border(2.dp, Midnight.accent, CircleShape)
+                if (checked) Modifier.background(Fresh.accent)
+                else Modifier.border(2.dp, Fresh.accent, CircleShape)
             )
             .clickable(onClick = onToggle),
         contentAlignment = Alignment.Center
@@ -915,7 +915,7 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
         ) {
             Text(
                 if (item.id == 0L) "New action" else "Edit action",
-                style = MaterialTheme.typography.headlineMedium.copy(brush = Midnight.accentHorizontal)
+                style = MaterialTheme.typography.headlineMedium.copy(brush = Fresh.accentHorizontal)
             )
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
@@ -962,7 +962,7 @@ private fun EditSheet(item: Item, onDismiss: () -> Unit, onSave: (Item) -> Unit)
 
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss) { Text("Cancel", color = Midnight.TextDim) }
+                TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
                 Spacer(Modifier.weight(1f))
                 GradientButton(
                     "Save", Icons.Rounded.Check,
@@ -1004,7 +1004,7 @@ private fun SheetLabel(text: String) {
     Text(
         text.uppercase(),
         style = MaterialTheme.typography.labelSmall,
-        color = Midnight.Magenta,
+        color = Fresh.Teal,
         modifier = Modifier.padding(top = 4.dp)
     )
 }
