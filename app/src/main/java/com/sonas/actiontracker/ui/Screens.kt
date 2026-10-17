@@ -29,6 +29,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,7 +42,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,6 +53,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -123,6 +128,8 @@ private val CONTEXTS = listOf("Work", "Family", "Kids/School")
 private const val DAY_MS = 86_400_000L
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
 private val PILL = RoundedCornerShape(50)
+private const val TAB_ACTIONS = 0
+private val TAB_LABELS = listOf("Actions", "Suggested")
 private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
@@ -188,12 +195,6 @@ private fun personColor(name: String): Color = when (Math.floorMod(name.hashCode
     else -> Fresh.Amber
 }
 
-private fun greeting(): String = when (LocalTime.now().hour) {
-    in 5..11 -> "Good morning"
-    in 12..16 -> "Good afternoon"
-    else -> "Good evening"
-}
-
 // ---------------------------------------------------------------- Lock screen
 
 @Composable
@@ -243,7 +244,7 @@ fun AppScreen(
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
     var group by remember { mutableStateOf(Group.DATE) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var pickingTime by remember { mutableStateOf(false) }
@@ -252,10 +253,18 @@ fun AppScreen(
     val open = actions.filter { it.status == STATUS_OPEN }
 
     AuroraBackground {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Header(
+        // Top + side insets keep the bar clear of the status bar and the camera cutout in landscape.
+        Column(
+            Modifier.fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+        ) {
+            TopBar(
+                tab = tab,
+                onTab = { tab = it },
+                counts = listOf(open.size, suggested.size),
                 open = open,
-                inbox = suggested.size,
+                group = group,
+                onGroup = { group = it },
                 syncing = vm.syncing,
                 onSync = onSync,
                 menu = {
@@ -272,21 +281,15 @@ fun AppScreen(
             ) {
                 MessageBanner(lastMessage, onClose = { vm.message = null })
             }
-            TabSwitcher(
-                tab = tab,
-                labels = listOf("Suggested", "Actions"),
-                counts = listOf(suggested.size, open.size),
-                onSelect = { tab = it }
-            )
             PullToRefreshBox(
                 isRefreshing = vm.syncing,
                 onRefresh = onSync,
                 modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
-                if (tab == 0) {
-                    SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
+                if (tab == TAB_ACTIONS) {
+                    ActionsList(actions, group, vm = vm, onEdit = { editing = it })
                 } else {
-                    ActionsList(actions, group, onGroup = { group = it }, vm = vm, onEdit = { editing = it })
+                    SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
                 }
             }
         }
@@ -312,66 +315,116 @@ fun AppScreen(
     }
 }
 
+/**
+ * One slim bar: tabs, group-by (Actions only), sync and menu, plus a one-line date/due strip.
+ * On wide windows (landscape) the strip moves into the same row so the bar is a single line.
+ */
 @Composable
-private fun Header(open: List<Item>, inbox: Int, syncing: Boolean, onSync: () -> Unit, menu: @Composable () -> Unit) {
-    val t = today()
-    val overdue = open.count { it.dueDate < t }
-    val dueToday = open.count { it.dueDate == t }
-    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(Fresh.accent))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE · MMM d")).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = Fresh.TextDim,
-                modifier = Modifier.weight(1f)
-            )
-            SyncButton(syncing, onSync)
-            Spacer(Modifier.width(6.dp))
-            menu()
+private fun TopBar(
+    tab: Int,
+    onTab: (Int) -> Unit,
+    counts: List<Int>,
+    open: List<Item>,
+    group: Group,
+    onGroup: (Group) -> Unit,
+    syncing: Boolean,
+    onSync: () -> Unit,
+    menu: @Composable () -> Unit
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 600.dp
+        Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TabSwitcher(
+                    tab, TAB_LABELS, counts, onTab,
+                    if (wide) Modifier.width(320.dp) else Modifier.weight(1f)
+                )
+                if (wide) {
+                    Spacer(Modifier.width(16.dp))
+                    DueStrip(open, Modifier.weight(1f))
+                }
+                if (tab == TAB_ACTIONS) {
+                    Spacer(Modifier.width(6.dp))
+                    GroupMenu(group, onGroup)
+                }
+                Spacer(Modifier.width(6.dp))
+                SyncButton(syncing, onSync)
+                Spacer(Modifier.width(4.dp))
+                menu()
+            }
+            if (!wide) DueStrip(open, Modifier.padding(start = 8.dp, top = 4.dp))
         }
-        Spacer(Modifier.height(6.dp))
-        Text(greeting(), style = MaterialTheme.typography.titleMedium, color = Fresh.TextDim)
-        Text(
-            when {
-                open.isEmpty() && inbox == 0 -> "All clear."
-                overdue > 0 -> "Let's catch up."
-                dueToday > 0 -> "Focus on today."
-                open.isEmpty() -> "Inbox waiting."
-                else -> "You're ahead."
-            },
-            style = MaterialTheme.typography.displaySmall.copy(brush = Fresh.accentHorizontal),
-            maxLines = 1
-        )
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("Late", overdue, if (overdue > 0) Fresh.Coral else Fresh.Text, Modifier.weight(1f))
-            StatTile("Today", dueToday, Fresh.Sky, Modifier.weight(1f))
-            StatTile("Open", open.size, Fresh.Text, Modifier.weight(1f))
-            StatTile("Inbox", inbox, Fresh.Teal, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(14.dp))
     }
 }
 
+/** "FRI, OCT 17 · 2 late · 3 today" in one small line. */
 @Composable
-private fun StatTile(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
-    Column(modifier.glass(RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp)) {
+private fun DueStrip(open: List<Item>, modifier: Modifier = Modifier) {
+    val t = today()
+    val overdue = open.count { it.dueDate < t }
+    val dueToday = open.count { it.dueDate == t }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(Fresh.accent))
+        Spacer(Modifier.width(6.dp))
         Text(
-            "${shown.toInt()}",
-            style = MaterialTheme.typography.headlineMedium,
-            color = color
+            LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, MMM d")).uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = Fresh.TextDim,
+            maxLines = 1
         )
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
+        if (overdue > 0) {
+            Text(" · ", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
+            Text("$overdue late", style = MaterialTheme.typography.labelSmall, color = Fresh.Coral, maxLines = 1)
+        }
+        Text(" · ", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
+        Text(
+            if (dueToday > 0) "$dueToday today" else "nothing due today",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (dueToday > 0) Fresh.Sky else Fresh.TextDim,
+            maxLines = 1
+        )
+    }
+}
+
+/** Small glass pill showing the current grouping; tap for Date / Person / Context. */
+@Composable
+private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier.height(36.dp).glass(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(group.label, style = MaterialTheme.typography.labelLarge, color = Fresh.Text)
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Group by", tint = Fresh.TextDim)
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Text(
+                "GROUP BY",
+                style = MaterialTheme.typography.labelSmall,
+                color = Fresh.TextDim,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            Group.entries.forEach { g ->
+                DropdownMenuItem(
+                    text = { Text(g.label) },
+                    trailingIcon = { if (g == group) Icon(Icons.Rounded.Check, null, tint = Fresh.Green) },
+                    onClick = { onGroup(g); open = false }
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
     Box(
-        Modifier.size(42.dp).glass(CircleShape).clickable(enabled = enabled, onClick = onClick),
+        Modifier.size(36.dp).glass(CircleShape).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { content() }
 }
@@ -389,7 +442,7 @@ private fun SyncButton(syncing: Boolean, onSync: () -> Unit) {
             Icons.Rounded.Refresh,
             contentDescription = if (syncing) "Syncing" else "Sync",
             tint = if (syncing) Fresh.Sky else Fresh.Text,
-            modifier = Modifier.size(22.dp).then(if (syncing) Modifier.rotate(angle) else Modifier)
+            modifier = Modifier.size(20.dp).then(if (syncing) Modifier.rotate(angle) else Modifier)
         )
     }
 }
@@ -437,10 +490,14 @@ private fun MoreMenu(
 
 /** Glass capsule with a gradient pill that slides between the two tabs. */
 @Composable
-private fun TabSwitcher(tab: Int, labels: List<String>, counts: List<Int>, onSelect: (Int) -> Unit) {
-    BoxWithConstraints(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp).glass(PILL).padding(4.dp)
-    ) {
+private fun TabSwitcher(
+    tab: Int,
+    labels: List<String>,
+    counts: List<Int>,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(modifier.height(40.dp).glass(PILL).padding(3.dp)) {
         val segment = maxWidth / labels.size
         val x by animateDpAsState(segment * tab, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow), label = "tab")
         Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Fresh.accentHorizontal))
@@ -713,7 +770,6 @@ private data class Section(val key: String, val label: String, val items: List<I
 private fun ActionsList(
     actions: List<Item>,
     group: Group,
-    onGroup: (Group) -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit
 ) {
@@ -729,16 +785,9 @@ private fun ActionsList(
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 104.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        item(key = "group") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("GROUP BY", style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim)
-                Spacer(Modifier.width(2.dp))
-                Group.entries.forEach { g -> GroupChip(g.label, group == g) { onGroup(g) } }
-            }
-        }
         if (sections.isEmpty()) {
             item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -765,19 +814,6 @@ private fun ActionsList(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun GroupChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "chip")
-    Box(
-        Modifier.clip(PILL)
-            .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier.glass(PILL))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp)
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = fg)
     }
 }
 

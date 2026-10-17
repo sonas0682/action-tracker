@@ -13,6 +13,7 @@ encrypted on the phone.
 - **Sources**: Gmail (inbox, excluding promotions/social, last 2 days), Google Calendar (next 7 days), and custom items (+ button).
 - **Confirm before adding**: Gmail/Calendar items land in *Suggested* as compact rows; tap ✓ to add, ✕ to dismiss, the row to expand and edit, or "Add all".
 - **Default due date is tomorrow** when the source has no date. A date in the text (e.g. "by Friday", "Oct 20", "2026-10-20", "tomorrow") overrides it. Editable any time.
+- **Slim top bar**: Actions (opens first) and Suggested tabs, a one-line date/late/today strip, and a small group-by dropdown, so the list gets almost all of the screen in portrait and landscape.
 - **Group by** date, person (Me, Nathiya, Vibu, Dharshu, or anyone), or context (Work, Family, Kids/School).
 - **No duplicates**: every Gmail message ID / calendar event ID is recorded the first time it is seen and never evaluated again, even if you dismiss the suggestion.
 - **Background sync** every ~2 hours with a notification when new suggestions arrive.
