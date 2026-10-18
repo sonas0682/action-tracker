@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -366,8 +367,6 @@ fun AppScreen(
                     onTab = { tab = it },
                     counts = listOf(open.size, suggested.size),
                     open = open,
-                    group = group,
-                    onGroup = { group = it },
                     syncing = vm.syncing,
                     onSync = onSync,
                     onInsights = { insights = true },
@@ -393,7 +392,7 @@ fun AppScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth()
                 ) {
                     if (tab == TAB_ACTIONS) {
-                        ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
+                        ActionsList(actions, group, onGroup = { group = it }, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
                     } else {
                         SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
                     }
@@ -483,8 +482,9 @@ fun AppScreen(
 }
 
 /**
- * One slim bar: tabs, group-by (Actions only), sync and menu, plus a one-line stats strip.
- * On wide windows (landscape) the strip moves into the same row so the bar is a single line.
+ * The home bar. Row 1: Actions | Suggested tabs on the left, calendar/stats, sync and menu on the
+ * right. The icons are measured first, so the tabs can only shrink (labels ellipsize) and never
+ * push or cover them. Row 2: the four stat pills; on wide windows (landscape) they sit in row 1.
  */
 @Composable
 private fun TopBar(
@@ -492,8 +492,6 @@ private fun TopBar(
     onTab: (Int) -> Unit,
     counts: List<Int>,
     open: List<Item>,
-    group: Group,
-    onGroup: (Group) -> Unit,
     syncing: Boolean,
     onSync: () -> Unit,
     onInsights: () -> Unit,
@@ -501,31 +499,83 @@ private fun TopBar(
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 600.dp
-        Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TabSwitcher(
-                    tab, TAB_LABELS, counts, onTab,
-                    if (wide) Modifier.width(320.dp) else Modifier.weight(1f)
-                )
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HomeTabs(tab, counts, onTab, Modifier.weight(1f, fill = false))
                 if (wide) {
                     Spacer(Modifier.width(16.dp))
                     StatsStrip(open, inbox = counts[1], Modifier.weight(1f))
                 }
-                if (tab == TAB_ACTIONS) {
-                    Spacer(Modifier.width(6.dp))
-                    GroupMenu(group, onGroup)
+                Spacer(Modifier.width(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GlassIconButton(onClick = onInsights) {
+                        Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
+                    }
+                    SyncButton(syncing, onSync)
+                    menu()
                 }
-                Spacer(Modifier.width(6.dp))
-                GlassIconButton(onClick = onInsights) {
-                    Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(6.dp))
-                SyncButton(syncing, onSync)
-                Spacer(Modifier.width(4.dp))
-                menu()
             }
-            if (!wide) StatsStrip(open, inbox = counts[1], Modifier.fillMaxWidth().padding(top = 6.dp, end = 4.dp))
+            if (!wide) StatsStrip(open, inbox = counts[1], Modifier.fillMaxWidth().padding(top = 8.dp))
         }
+    }
+}
+
+/**
+ * Two-segment control. Each segment always shows its count badge (dimmed at zero), so nothing
+ * appears or disappears when switching tabs and the bar never reflows.
+ */
+@Composable
+private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.height(40.dp).glass(PILL).padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TAB_LABELS.forEachIndexed { i, label ->
+            val selected = tab == i
+            val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "tabFg")
+            Row(
+                Modifier.weight(1f, fill = false).fillMaxHeight().clip(PILL)
+                    .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier)
+                    .clickable { onSelect(i) }
+                    .padding(start = 14.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(6.dp))
+                CountBadge(counts[i], selected)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CountBadge(count: Int, selected: Boolean) {
+    val bg = when {
+        selected -> Color(0x33FFFFFF)
+        count > 0 -> Fresh.Indigo.copy(alpha = 0.12f)
+        else -> Fresh.Glass
+    }
+    val fg = when {
+        selected -> Color.White
+        count > 0 -> Fresh.Indigo
+        else -> Fresh.TextDim
+    }
+    Box(
+        Modifier.widthIn(min = 22.dp).clip(PILL).background(bg).padding(horizontal = 6.dp, vertical = 1.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(if (count > 99) "99+" else "$count", style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1)
     }
 }
 
@@ -547,13 +597,19 @@ private fun StatsStrip(open: List<Item>, inbox: Int, modifier: Modifier = Modifi
 private fun MiniStat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
     val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
     Row(
-        modifier.height(30.dp).glass(PILL).padding(horizontal = 10.dp),
+        modifier.height(28.dp).glass(PILL).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("${shown.toInt()}", style = MaterialTheme.typography.titleSmall, color = color, maxLines = 1)
         Spacer(Modifier.width(5.dp))
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim, maxLines = 1)
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = Fresh.TextDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -563,10 +619,10 @@ private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.height(36.dp).glass(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
+            Modifier.height(32.dp).glass(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(group.label, style = MaterialTheme.typography.labelLarge, color = Fresh.Text)
+            Text("By ${group.label.lowercase()}", style = MaterialTheme.typography.labelLarge, color = Fresh.Text, maxLines = 1)
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Group by", tint = Fresh.TextDim)
         }
         DropdownMenu(
@@ -1007,6 +1063,7 @@ private data class Section(val key: String, val label: String, val items: List<I
 private fun ActionsList(
     actions: List<Item>,
     group: Group,
+    onGroup: (Group) -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
@@ -1031,9 +1088,21 @@ private fun ActionsList(
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 104.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 104.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        // Today's date and the group-by chip; mirrors Suggested's "N TO REVIEW · Add all" row and scrolls away.
+        item(key = "list-head") {
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, MMM d")).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Fresh.TextDim,
+                    modifier = Modifier.weight(1f)
+                )
+                GroupMenu(group, onGroup)
+            }
+        }
         if (sections.isEmpty()) {
             item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {

@@ -12,6 +12,10 @@ App
   accents. Not a traditional Material look, and not dark.
 - One slim top bar; the list gets almost all of the screen in portrait and landscape. No tall
   headlines or stat tiles; stats stay as the compact Late/Today/Open/Inbox pills.
+- Top bar layout: Actions | Suggested segmented tabs left, calendar/stats, sync and ⋮ icons right
+  (icons never shrink or get covered; tab labels ellipsize instead). Both tabs always show a count
+  badge, dimmed at zero, so nothing reflows on switch. Stat pills sit on a second row (same row
+  on wide/landscape). Group-by is a small chip at the top of the Actions list, not in the bar.
 - Actions is the first/default tab, Suggested second. Default grouping is Date; Time, Person
   and Context are the alternatives.
 - The add button is an icon-only `+` (long-press opens voice capture). No per-row delete icon:
