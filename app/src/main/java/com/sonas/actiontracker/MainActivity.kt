@@ -42,7 +42,6 @@ import com.sonas.actiontracker.ui.BackupDialog
 import com.sonas.actiontracker.ui.LockScreen
 import com.sonas.actiontracker.ui.MainVM
 import kotlinx.coroutines.launch
-import java.time.LocalTime
 import java.util.concurrent.TimeUnit
 
 class MainActivity : FragmentActivity() {
@@ -50,7 +49,6 @@ class MainActivity : FragmentActivity() {
     private var unlocked by mutableStateOf(false)
     /** Fingerprint lock at launch. Off by default; the database key never depends on it. */
     private var lockEnabled by mutableStateOf(false)
-    private var reminders by mutableStateOf(Reminders.Settings(true, LocalTime.of(8, 0)))
     private var lastStop = 0L
     /** True while the saved crash trace is on screen instead of the app. */
     private var crashScreen = false
@@ -101,7 +99,6 @@ class MainActivity : FragmentActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         Notify.ensureChannel(this)
         scheduleBackgroundSync()
-        reminders = Reminders.settings(this)
         Reminders.schedule(this)
         SlotReminders.schedule(this)
         TaskNotifications.showQuickAdd(this)
@@ -118,11 +115,6 @@ class MainActivity : FragmentActivity() {
                         onLockChange = {
                             lockEnabled = it
                             prefs.edit().putBoolean("lock_enabled", it).apply()
-                        },
-                        reminders = reminders,
-                        onRemindersChange = {
-                            reminders = it
-                            Reminders.save(this, it)
                         },
                         onOpenBackup = {
                             vm.refreshBackupStatus()

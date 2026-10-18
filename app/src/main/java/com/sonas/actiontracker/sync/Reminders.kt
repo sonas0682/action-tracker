@@ -16,8 +16,9 @@ import java.time.LocalTime
 import java.util.concurrent.TimeUnit
 
 /**
- * Daily due-date reminder: once a day, at or after the chosen time, posts a summary of
- * open actions that are due today or overdue, with a Done/Snooze notification per task.
+ * Morning digest: once a day, at or after 8 AM, posts a summary of open actions that are due
+ * today or overdue, with a Done/Snooze notification per task. The time-of-day reminders
+ * ([SlotReminders]) cover the rest of the day, so the digest is just on or off.
  *
  * A short periodic check (rather than one 24 h job) keeps the time right across
  * daylight-saving changes and still fires if the phone was off at reminder time.
@@ -28,21 +29,15 @@ object Reminders {
     private const val WORK = "due_reminders"
     private const val CHANNEL = "due_reminders"
 
-    data class Settings(val enabled: Boolean, val time: LocalTime)
+    val DIGEST_TIME: LocalTime = LocalTime.of(8, 0)
 
-    fun settings(context: Context): Settings {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return Settings(
-            enabled = p.getBoolean("enabled", true),
-            time = LocalTime.of(p.getInt("hour", 8), p.getInt("minute", 0))
-        )
-    }
+    /** Keeps the saved on/off from the old "Daily due-date reminder" switch; its custom time is dropped. */
+    fun enabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("enabled", true)
 
-    fun save(context: Context, settings: Settings) {
+    fun setEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putBoolean("enabled", settings.enabled)
-            .putInt("hour", settings.time.hour)
-            .putInt("minute", settings.time.minute)
+            .putBoolean("enabled", enabled)
             .apply()
         schedule(context)
     }
@@ -52,8 +47,10 @@ object Reminders {
      * The check also backs up the time-of-day reminders, so it runs while either kind is on.
      */
     fun schedule(context: Context) {
+        // Builds before the fixed 8 AM digest saved a custom reminder time here.
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("hour").remove("minute").apply()
         val wm = WorkManager.getInstance(context)
-        if (!settings(context).enabled && !SlotReminders.anyEnabled(context)) {
+        if (!enabled(context) && !SlotReminders.anyEnabled(context)) {
             wm.cancelUniqueWork(WORK)
             return
         }
@@ -61,12 +58,11 @@ object Reminders {
         wm.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
-    /** Posts today's digest if reminders are on, it is past the reminder time, and none was posted today. */
+    /** Posts today's digest if it is on, it is past 8 AM, and none was posted today. */
     suspend fun checkAndNotify(context: Context, now: LocalDateTime = LocalDateTime.now()) {
-        val s = settings(context)
         val today = now.toLocalDate()
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!s.enabled || now.toLocalTime() < s.time) return
+        if (!enabled(context) || now.toLocalTime() < DIGEST_TIME) return
         if (prefs.getLong("last_day", Long.MIN_VALUE) == today.toEpochDay()) return
 
         val due = Db.get(context).dao().openDueBy(today.toEpochDay())
@@ -93,7 +89,7 @@ object Reminders {
 
     private fun ensureChannel(context: Context) {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Due-date reminders", NotificationManager.IMPORTANCE_DEFAULT)
+            NotificationChannel(CHANNEL, "Morning digest", NotificationManager.IMPORTANCE_DEFAULT)
         )
     }
 }
