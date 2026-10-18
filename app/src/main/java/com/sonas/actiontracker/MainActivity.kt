@@ -107,7 +107,7 @@ class MainActivity : FragmentActivity() {
         Backup.schedule(this)
         SeriesWorker.schedule(this)
         offerRestoreOnFreshInstall(prefs)
-        if (savedInstanceState == null) takeSharedPhoto(intent)
+        if (savedInstanceState == null) takeShared(intent)
         setContent {
             AppTheme {
                 if (unlocked) {
@@ -145,12 +145,25 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        takeSharedPhoto(intent)
+        takeShared(intent)
     }
 
-    /** A photo or screenshot shared into the app is read into a draft action (Photo to task). */
-    private fun takeSharedPhoto(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("image/") != true) return
+    /**
+     * A photo or screenshot shared into the app is read into a draft action (Photo to task);
+     * shared text is drafted the same way (Share to task), with its subject as the first line.
+     */
+    private fun takeShared(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND) return
+        if (intent.type == "text/plain") {
+            val text = listOfNotNull(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getStringExtra(Intent.EXTRA_TEXT))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .joinToString("\n")
+            if (text.isNotEmpty()) vm.sharedText = text
+            return
+        }
+        if (intent.type?.startsWith("image/") != true) return
         val uri: Uri? = if (Build.VERSION.SDK_INT >= 33) {
             intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         } else {

@@ -40,6 +40,8 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf<String?>(null)
     /** A photo shared into the app, waiting to be read into a draft action. */
     var sharedPhoto by mutableStateOf<Uri?>(null)
+    /** Text shared into the app (subject first), waiting to be drafted into an action. */
+    var sharedText by mutableStateOf<String?>(null)
 
     // Repeating actions are kept three months ahead; this adds whatever came into range since the last run.
     init {

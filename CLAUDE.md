@@ -34,7 +34,7 @@ gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk
 | `sync/Google.kt`, `Extractor.kt`, `Sync.kt` | Gmail + Calendar REST, rule-based extraction, `SyncWorker` (~2 h) and notifications |
 | `sync/SmartTitles.kt` | Gemini Nano summarization: email titles and three-bullet summaries |
 | `sync/VoiceDraft.kt` | Spoken sentence to draft `Item` (rules + Nano proofreading) |
-| `sync/PhotoDraft.kt` | Photo / shared image to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
+| `sync/PhotoDraft.kt` | Photo, shared image or shared text to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
 | `sync/Reminders.kt` | 8 AM daily digest; `ReminderWorker` runs every 15 min |
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
 | `sync/TaskNotifications.kt` | Grouped per-task reminder notifications (Done / Snooze 30 min) and the "Add a task" reply-box notification, watch-friendly |

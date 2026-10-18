@@ -74,6 +74,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.DatePicker
@@ -216,6 +217,7 @@ private fun sourceIcon(source: String): ImageVector = when (source) {
     "CALENDAR" -> Icons.Rounded.DateRange
     "VOICE" -> MicIcon
     "PHOTO" -> CameraIcon
+    "SHARE" -> Icons.Rounded.Share
     else -> Icons.Rounded.Create
 }
 
@@ -292,7 +294,7 @@ fun AppScreen(
     var editing by remember { mutableStateOf<Item?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
     var photoDraft by remember { mutableStateOf<PhotoDraft.Draft?>(null) }
-    var readingPhoto by remember { mutableStateOf(false) }
+    var readingPhoto by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
     var drafting by remember { mutableStateOf(false) }
     val appContext = LocalContext.current.applicationContext
@@ -416,11 +418,11 @@ fun AppScreen(
     val captureFile = remember { File(File(appContext.cacheDir, "photos"), "capture.jpg") }
     val readPhoto: (Uri, Boolean) -> Unit = { uri, captured ->
         editing = null
-        readingPhoto = true
+        readingPhoto = "Reading the photo"
         scope.launch {
             val draft = runCatching { PhotoDraft.build(appContext, uri, people, contexts, usualContexts) }.getOrNull()
             if (captured) captureFile.delete()
-            readingPhoto = false
+            readingPhoto = null
             if (draft == null) {
                 vm.message = "Couldn't read any text in that photo"
             } else {
@@ -452,7 +454,26 @@ fun AppScreen(
             readPhoto(uri, false)
         }
     }
-    if (readingPhoto) PhotoReadingDialog()
+    // Share to task: text shared from another app becomes a draft the same way.
+    LaunchedEffect(vm.sharedText) {
+        val text = vm.sharedText ?: return@LaunchedEffect
+        vm.sharedText = null
+        editing = null
+        readingPhoto = "Reading the shared text"
+        // Not in this effect's scope: clearing sharedText restarts the effect.
+        scope.launch {
+            val draft = runCatching { PhotoDraft.fromShare(appContext, text, people, contexts, usualContexts) }.getOrNull()
+            readingPhoto = null
+            if (draft == null) {
+                vm.message = "Nothing to add from that share"
+            } else {
+                voiceDraft = null
+                photoDraft = draft
+                editing = draft.item
+            }
+        }
+    }
+    readingPhoto?.let { PhotoReadingDialog(it) }
 
     if (listening) {
         ListenSheet(
@@ -1433,7 +1454,7 @@ private fun EditSheet(
                 Text(
                     when {
                         voice != null -> "Voice draft"
-                        photo != null -> "Photo draft"
+                        photo != null -> if (photo.fromPhoto) "Photo draft" else "Shared draft"
                         item.id == 0L -> "New action"
                         else -> "Edit action"
                     },

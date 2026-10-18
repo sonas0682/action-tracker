@@ -89,6 +89,21 @@ class PhotoDraftTest {
         assertEquals("Family", item.context)
     }
 
+    @Test fun sharedChatMessageBecomesADraft() {
+        val text = "Hi parents! Reminder: picture day is Thursday Oct 22. Please send the order form for Dharshu by Tuesday Oct 20."
+        val item = PhotoDraft.fromText(
+            text, PhotoDraft.ruleDates(text, today), people, VoiceDraft.DEFAULT_CONTEXTS, today, source = PhotoDraft.SOURCE_SHARE
+        )
+        assertEquals("Reminder: picture day is Thursday Oct 22", item.title)
+        assertEquals("Dharshu", item.person)
+        assertEquals(LocalDate.of(2026, 10, 20), LocalDate.ofEpochDay(item.dueDate))
+        assertEquals("SHARE", item.source)
+        assertTrue(item.notes.startsWith("Shared:\n"))
+    }
+
+    @Test fun sharedPageTitleBeatsItsLink() =
+        assertEquals("Fall soccer registration", PhotoDraft.title("Fall soccer registration\nhttps://example.org/register"))
+
     @Test fun noDateDefaultsToTomorrow() {
         val item = PhotoDraft.fromText("Bring snacks for the team", emptyList(), people, VoiceDraft.DEFAULT_CONTEXTS, today)
         assertEquals(today.plusDays(1), LocalDate.ofEpochDay(item.dueDate))

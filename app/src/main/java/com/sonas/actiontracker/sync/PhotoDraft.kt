@@ -33,12 +33,25 @@ import java.util.TimeZone
  * 3. Gemini Nano summarization writes the title and a three-bullet summary when the text is
  *    long enough; otherwise the title comes from the most task-like line.
  * Person and context use the same rules as voice capture. The image is never stored or sent.
+ *
+ * Share to task uses the same steps 2 and 3 on text shared from another app (a WhatsApp
+ * message, an email, a web page).
  */
 object PhotoDraft {
-    data class Draft(val item: Item, val text: String, val summarizedByNano: Boolean, val datesByModel: Boolean)
+    /** [fromPhoto] is false for shared text. */
+    data class Draft(
+        val item: Item,
+        val text: String,
+        val summarizedByNano: Boolean,
+        val datesByModel: Boolean,
+        val fromPhoto: Boolean = true
+    )
 
     /** A date found in the text, with where it starts (to look at the words around it). */
     data class Found(val start: Int, val date: LocalDate, val time: LocalTime? = null)
+
+    const val SOURCE_PHOTO = "PHOTO"
+    const val SOURCE_SHARE = "SHARE"
 
     private const val MAX_TITLE_CHARS = 120
     private const val MAX_NOTES_CHARS = 1_000
@@ -59,8 +72,34 @@ object PhotoDraft {
     ): Draft? {
         val text = readText(context, uri).trim()
         if (text.length < 3) return null
+        return draft(context, text, SOURCE_PHOTO, people, contexts, usual, today)
+    }
+
+    /** Drafts an action from text shared into the app, or returns null when there is no text. */
+    suspend fun fromShare(
+        context: Context,
+        text: String,
+        people: List<String>,
+        contexts: List<String>,
+        usual: Map<String, String> = emptyMap(),
+        today: LocalDate = LocalDate.now()
+    ): Draft? {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return null
+        return draft(context, trimmed, SOURCE_SHARE, people, contexts, usual, today)
+    }
+
+    private suspend fun draft(
+        context: Context,
+        text: String,
+        source: String,
+        people: List<String>,
+        contexts: List<String>,
+        usual: Map<String, String>,
+        today: LocalDate
+    ): Draft {
         val modelDates = modelDates(text)
-        val rules = fromText(text, modelDates ?: ruleDates(text, today), people, contexts, today, usual)
+        val rules = fromText(text, modelDates ?: ruleDates(text, today), people, contexts, today, usual, source)
         val nano = SmartTitles.summarize(context, text)
         val item = if (nano == null) rules else rules.copy(
             title = nano.first.ifEmpty { rules.title }.take(MAX_TITLE_CHARS),
@@ -69,7 +108,7 @@ object PhotoDraft {
                 append(rules.notes)
             }.take(MAX_NOTES_CHARS)
         )
-        return Draft(item, text, nano != null, modelDates != null)
+        return Draft(item, text, nano != null, modelDates != null, source == SOURCE_PHOTO)
     }
 
     // ------------------------------------------------------------------ on-device models
@@ -130,14 +169,15 @@ object PhotoDraft {
 
     // ------------------------------------------------------------------ rules (no models)
 
-    /** The draft from the photo's text and the dates found in it, without Gemini Nano. */
+    /** The draft from the photo's (or shared) text and the dates found in it, without Gemini Nano. */
     fun fromText(
         text: String,
         dates: List<Found>,
         people: List<String>,
         contexts: List<String>,
         today: LocalDate,
-        usual: Map<String, String> = emptyMap()
+        usual: Map<String, String> = emptyMap(),
+        source: String = SOURCE_PHOTO
     ): Item {
         val flat = text.replace(Regex("""\s+"""), " ").trim()
         val person = VoiceDraft.person(flat, people)
@@ -148,12 +188,12 @@ object PhotoDraft {
             ?: TimeOfDay.defaultFor(ctx)
         return Item(
             title = title(text).take(MAX_TITLE_CHARS),
-            notes = "From photo:\n" + text.trim().take(MAX_PHOTO_TEXT_CHARS),
+            notes = (if (source == SOURCE_PHOTO) "From photo:\n" else "Shared:\n") + text.trim().take(MAX_PHOTO_TEXT_CHARS),
             person = person,
             context = ctx,
             dueDate = (due?.date ?: today.plusDays(1)).toEpochDay(), // default: tomorrow
             status = STATUS_OPEN,
-            source = "PHOTO",
+            source = source,
             timeOfDay = time.name
         )
     }
@@ -220,11 +260,12 @@ object PhotoDraft {
     )
 
     /**
-     * The most task-like line: the first one with a task word ("Field Trip Permission Slip"),
+     * The most task-like line or sentence: the first one with a task word ("Field Trip Permission Slip"),
      * else the first line of a few words. ALL-CAPS headings become sentence case.
      */
     fun title(text: String): String {
-        val lines = text.lines()
+        // Lines, and sentences within a line, so a one-paragraph chat message still gets a short title.
+        val lines = text.lines().flatMap { it.split(Regex("""(?<=[.!?])\s+(?=[A-Z])""")) }
             .map { it.replace(Regex("""\s+"""), " ").trim(' ', '-', '•', '*', ':', '|') }
             .filter { line -> line.count { it.isLetter() } >= 3 }
         val pick = lines.firstOrNull { taskWords.containsMatchIn(it) && it.split(' ').size in 2..14 }

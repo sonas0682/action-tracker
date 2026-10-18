@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -59,19 +61,19 @@ fun PhotoButton(onPick: (fromCamera: Boolean) -> Unit) {
     }
 }
 
-/** Shown while the photo is read; everything happens on the phone. */
+/** Shown while a photo or shared text is read; everything happens on the phone. */
 @Composable
-fun PhotoReadingDialog() {
+fun PhotoReadingDialog(title: String) {
     AlertDialog(
         onDismissRequest = {},
         confirmButton = {},
         icon = { CircularProgressIndicator(Modifier.size(28.dp), color = Fresh.Teal, strokeWidth = 3.dp) },
-        title = { Text("Reading the photo") },
+        title = { Text(title) },
         text = { Text("Finding the text, dates and a summary on this phone.") }
     )
 }
 
-/** Shown at the top of the edit sheet for a photo draft: what was read and what drafted it. */
+/** Shown at the top of the edit sheet for a photo or shared draft: what was read and what drafted it. */
 @Composable
 fun PhotoNote(draft: PhotoDraft.Draft) {
     Column(
@@ -79,9 +81,9 @@ fun PhotoNote(draft: PhotoDraft.Draft) {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(CameraIcon, null, tint = Fresh.Teal, modifier = Modifier.size(16.dp))
+            Icon(if (draft.fromPhoto) CameraIcon else Icons.Rounded.Share, null, tint = Fresh.Teal, modifier = Modifier.size(16.dp))
             Spacer(Modifier.size(6.dp))
-            Text("From the photo", style = MaterialTheme.typography.labelMedium, color = Fresh.Teal)
+            Text(if (draft.fromPhoto) "From the photo" else "Shared with Action Tracker", style = MaterialTheme.typography.labelMedium, color = Fresh.Teal)
         }
         Text(
             draft.text.replace(Regex("""\s+"""), " "),
@@ -91,11 +93,11 @@ fun PhotoNote(draft: PhotoDraft.Draft) {
         )
         Text(
             buildString {
-                append("Text read on-device by ML Kit")
-                append(if (draft.datesByModel) ", dates by ML Kit entity extraction" else ", dates by rules")
+                if (draft.fromPhoto) append("Text read on-device by ML Kit, ")
+                append(if (draft.datesByModel) "dates by ML Kit entity extraction" else "dates by rules")
                 if (draft.summarizedByNano) append(", title and summary by Gemini Nano")
                 append(". Check the fields, then Save.")
-            },
+            }.replaceFirstChar { it.uppercaseChar() },
             style = MaterialTheme.typography.bodySmall,
             color = Fresh.TextDim
         )
