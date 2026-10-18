@@ -401,6 +401,7 @@ fun AppScreen(
 
     val people = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_PEOPLE) { it.person } }
     val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
+    val usualContexts = remember(actions) { VoiceDraft.usualContexts(actions) }
 
     if (listening) {
         ListenSheet(
@@ -408,7 +409,7 @@ fun AppScreen(
             onHeard = { text ->
                 drafting = true
                 scope.launch {
-                    val draft = VoiceDraft.build(appContext, text, people, contexts)
+                    val draft = VoiceDraft.build(appContext, text, people, contexts, usualContexts)
                     drafting = false
                     listening = false
                     voiceDraft = draft

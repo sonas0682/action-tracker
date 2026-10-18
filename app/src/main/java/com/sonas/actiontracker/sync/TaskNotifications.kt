@@ -284,7 +284,8 @@ object TaskNotifications {
             text,
             VoiceDraft.recentValues(all, VoiceDraft.DEFAULT_PEOPLE) { it.person },
             VoiceDraft.recentValues(all, VoiceDraft.DEFAULT_CONTEXTS) { it.context },
-            today
+            today,
+            VoiceDraft.usualContexts(all)
         )
         Series.create(db, item, today)
         afterWrite(context)
