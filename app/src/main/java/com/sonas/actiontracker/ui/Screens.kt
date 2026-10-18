@@ -160,7 +160,6 @@ import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SlotReminders
-import com.sonas.actiontracker.sync.TaskNotifications
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlinx.coroutines.launch
@@ -865,7 +864,6 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
     var digest by remember { mutableStateOf(Reminders.enabled(context)) }
     var slots by remember { mutableStateOf(SlotReminders.settings(context)) }
     var editing by remember { mutableStateOf<SlotReminders.Slot?>(null) }
-    var quickAdd by remember { mutableStateOf(TaskNotifications.quickAddEnabled(context)) }
     val update: (SlotReminders.Slot) -> Unit = { changed ->
         SlotReminders.save(context, changed)
         slots = slots.map { if (it.slot == changed.slot) changed else it }
@@ -880,7 +878,7 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text("☀️  Morning digest · ${Reminders.DIGEST_TIME.format(TIME_FORMAT)}", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "Everything due today or overdue, in one summary",
+                            "Everything due today or overdue, in one notification",
                             style = MaterialTheme.typography.bodySmall,
                             color = Fresh.TextDim
                         )
@@ -892,7 +890,7 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "A pop-up lists the open actions for each time of day that are due today or overdue, each with Done and Snooze.",
+                    "One pop-up per time of day lists its open actions due today or overdue.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Fresh.TextDim
                 )
@@ -911,21 +909,6 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
                         TextButton(onClick = { editing = s }, enabled = s.enabled) { Text(s.time.format(TIME_FORMAT)) }
                         Switch(checked = s.enabled, onCheckedChange = { update(s.copy(enabled = it)) })
                     }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("🎙️  \"Add a task\" notification", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Reply to it, on the phone or your watch, to add a task",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Fresh.TextDim
-                        )
-                    }
-                    Switch(checked = quickAdd, onCheckedChange = {
-                        quickAdd = it
-                        TaskNotifications.setQuickAdd(context, it)
-                    })
                 }
             }
         },

@@ -37,7 +37,7 @@ gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk
 | `sync/PhotoDraft.kt` | Photo, shared image or shared text to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
 | `sync/Reminders.kt` | 8 AM daily digest; `ReminderWorker` runs every 15 min |
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
-| `sync/TaskNotifications.kt` | Grouped per-task reminder notifications (Done / Snooze 30 min) and the "Add a task" reply-box notification, watch-friendly |
+| `sync/TaskNotifications.kt` | One notification per reminder listing its tasks (Snooze 30 min; Done only when it lists one task); no per-task notifications |
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
 | `ui/Screens.kt`, `MainVM.kt` | Main screen, top bar, lists, edit sheet, swipe-to-delete |
 | `ui/Insights.kt` | Calendar + stats view |

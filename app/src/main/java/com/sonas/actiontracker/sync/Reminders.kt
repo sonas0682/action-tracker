@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Morning digest: once a day, at or after 8 AM, posts a summary of open actions that are due
- * today or overdue, with a Done/Snooze notification per task. The time-of-day reminders
+ * today or overdue, as one notification listing them ([TaskNotifications]). The time-of-day reminders
  * ([SlotReminders]) cover the rest of the day, so the digest is just on or off.
  *
  * A short periodic check (rather than one 24 h job) keeps the time right across
@@ -75,7 +75,7 @@ object Reminders {
         ensureChannel(context)
         val overdue = due.count { it.dueDate < today.toEpochDay() }
         val title = summary(due.size - overdue, overdue)
-        TaskNotifications.postGroup(context, TaskNotifications.digestTag(), CHANNEL, title, due, today, urgent = false)
+        TaskNotifications.post(context, TaskNotifications.digestTag(), CHANNEL, title, due, today, urgent = false)
     }
 
     internal fun summary(dueToday: Int, overdue: Int): String {

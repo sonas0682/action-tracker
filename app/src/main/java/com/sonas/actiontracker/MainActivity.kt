@@ -78,9 +78,7 @@ class MainActivity : FragmentActivity() {
         }
 
     private val notifPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) TaskNotifications.showQuickAdd(this)
-        }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The UI is always light, so keep dark system-bar icons whatever the system theme.
@@ -103,7 +101,7 @@ class MainActivity : FragmentActivity() {
         scheduleBackgroundSync()
         Reminders.schedule(this)
         SlotReminders.schedule(this)
-        TaskNotifications.showQuickAdd(this)
+        TaskNotifications.removeLegacy(this)
         Backup.schedule(this)
         SeriesWorker.schedule(this)
         offerRestoreOnFreshInstall(prefs)
