@@ -1,6 +1,7 @@
 package com.sonas.actiontracker.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,8 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     var syncing by mutableStateOf(false)
         private set
     var message by mutableStateOf<String?>(null)
+    /** A photo shared into the app, waiting to be read into a draft action. */
+    var sharedPhoto by mutableStateOf<Uri?>(null)
 
     // Repeating actions are kept three months ahead; this adds whatever came into range since the last run.
     init {

@@ -105,6 +105,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -136,12 +137,17 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import android.net.Uri
+import java.io.File
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationManagerCompat
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sonas.actiontracker.sync.PhotoDraft
 import com.sonas.actiontracker.sync.VoiceDraft
 import com.sonas.actiontracker.R
 import com.sonas.actiontracker.data.Item
@@ -209,6 +215,7 @@ private fun sourceIcon(source: String): ImageVector = when (source) {
     "GMAIL" -> Icons.Rounded.Email
     "CALENDAR" -> Icons.Rounded.DateRange
     "VOICE" -> MicIcon
+    "PHOTO" -> CameraIcon
     else -> Icons.Rounded.Create
 }
 
@@ -284,6 +291,8 @@ fun AppScreen(
     var insights by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
+    var photoDraft by remember { mutableStateOf<PhotoDraft.Draft?>(null) }
+    var readingPhoto by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var drafting by remember { mutableStateOf(false) }
     val appContext = LocalContext.current.applicationContext
@@ -388,7 +397,7 @@ fun AppScreen(
                 }
             }
             NewActionFab(
-                onClick = { voiceDraft = null; editing = Item.blank() },
+                onClick = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
                 onLongClick = startListening,
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
             )
@@ -403,6 +412,48 @@ fun AppScreen(
     val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
     val usualContexts = remember(actions) { VoiceDraft.usualContexts(actions) }
 
+    // Photo to task: a camera shot, a picked image or one shared into the app becomes a draft.
+    val captureFile = remember { File(File(appContext.cacheDir, "photos"), "capture.jpg") }
+    val readPhoto: (Uri, Boolean) -> Unit = { uri, captured ->
+        editing = null
+        readingPhoto = true
+        scope.launch {
+            val draft = runCatching { PhotoDraft.build(appContext, uri, people, contexts, usualContexts) }.getOrNull()
+            if (captured) captureFile.delete()
+            readingPhoto = false
+            if (draft == null) {
+                vm.message = "Couldn't read any text in that photo"
+            } else {
+                voiceDraft = null
+                photoDraft = draft
+                editing = draft.item
+            }
+        }
+    }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        if (ok) readPhoto(FileProvider.getUriForFile(appContext, "${appContext.packageName}.photos", captureFile), true)
+    }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { readPhoto(it, false) }
+    }
+    val startPhoto: (Boolean) -> Unit = { fromCamera ->
+        editing = null
+        if (fromCamera) {
+            captureFile.parentFile?.mkdirs()
+            runCatching { takePhoto.launch(FileProvider.getUriForFile(appContext, "${appContext.packageName}.photos", captureFile)) }
+                .onFailure { vm.message = "No camera app found" }
+        } else {
+            pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+    }
+    LaunchedEffect(vm.sharedPhoto) {
+        vm.sharedPhoto?.let { uri ->
+            vm.sharedPhoto = null
+            readPhoto(uri, false)
+        }
+    }
+    if (readingPhoto) PhotoReadingDialog()
+
     if (listening) {
         ListenSheet(
             drafting = drafting,
@@ -413,6 +464,7 @@ fun AppScreen(
                     drafting = false
                     listening = false
                     voiceDraft = draft
+                    photoDraft = null
                     editing = draft.item
                 }
             },
@@ -426,11 +478,13 @@ fun AppScreen(
             people = people,
             contexts = contexts,
             voice = voiceDraft,
-            onDismiss = { editing = null; voiceDraft = null },
+            photo = photoDraft,
+            onPhoto = startPhoto,
+            onDismiss = { editing = null; voiceDraft = null; photoDraft = null },
             onSave = { edited ->
                 if (item.seriesId != null && edited != item) pendingSave = item to edited
                 else saveNow(item, edited, SeriesScope.THIS)
-                editing = null; voiceDraft = null
+                editing = null; voiceDraft = null; photoDraft = null
             }
         )
     }
@@ -1319,6 +1373,8 @@ private fun EditSheet(
     people: List<String>,
     contexts: List<String>,
     voice: VoiceDraft.Draft? = null,
+    photo: PhotoDraft.Draft? = null,
+    onPhoto: ((fromCamera: Boolean) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (Item) -> Unit
 ) {
@@ -1327,8 +1383,9 @@ private fun EditSheet(
     var person by remember { mutableStateOf(item.person) }
     var context by remember { mutableStateOf(item.context) }
     var due by remember { mutableLongStateOf(item.dueDate) }
-    // New actions and voice drafts follow their context's default until a time chip is tapped.
-    var timePicked by remember { mutableStateOf(item.id != 0L) }
+    // New actions follow their context's default until a time chip is tapped; a voice or photo
+    // draft keeps a time it found ("at 3 PM") because that differs from the default.
+    var timePicked by remember { mutableStateOf(item.id != 0L || item.timeOfDay != TimeOfDay.defaultFor(item.context).name) }
     var pickedTime by remember { mutableStateOf(TimeOfDay.of(item.timeOfDay)) }
     val time = if (timePicked) pickedTime else TimeOfDay.defaultFor(context)
     var repeat by remember { mutableStateOf(Recurrence.of(item.recurrence)) }
@@ -1374,10 +1431,16 @@ private fun EditSheet(
             // Save sits in the header so the keyboard can never cover it.
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (voice != null) "Voice draft" else if (item.id == 0L) "New action" else "Edit action",
+                    when {
+                        voice != null -> "Voice draft"
+                        photo != null -> "Photo draft"
+                        item.id == 0L -> "New action"
+                        else -> "Edit action"
+                    },
                     style = MaterialTheme.typography.titleLarge.copy(brush = Fresh.accentHorizontal),
                     modifier = Modifier.weight(1f)
                 )
+                if (item.id == 0L && voice == null && photo == null && onPhoto != null) PhotoButton(onPhoto)
                 TextButton(onClick = onDismiss) { Text("Cancel", color = Fresh.TextDim) }
                 GradientButton("Save", Icons.Rounded.Check, enabled = title.isNotBlank(), onClick = save)
             }
@@ -1387,6 +1450,7 @@ private fun EditSheet(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 voice?.let { VoiceNote(it) }
+                photo?.let { PhotoNote(it) }
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
                     label = { Text("What needs doing?") },

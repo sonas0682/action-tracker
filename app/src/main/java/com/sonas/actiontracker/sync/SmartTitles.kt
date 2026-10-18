@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 /**
  * On-device Gemini Nano (ML Kit GenAI Summarization) pass that rewrites Gmail
@@ -128,6 +129,36 @@ object SmartTitles {
             } finally {
                 bullets.close()
             }
+        }
+    }
+
+    /** Per Nano call when the user is waiting on screen (photo drafts). */
+    private const val WAIT_SECONDS = 20L
+
+    /**
+     * Nano's one-line title and "• point" bullets for [text] (a photo's text), or null when
+     * the text is too short to summarize or Nano isn't ready, so the caller keeps its own title.
+     */
+    suspend fun summarize(context: Context, text: String): Pair<String, String>? = withContext(Dispatchers.IO) {
+        val input = text.take(MAX_INPUT_CHARS)
+        if (input.length < MIN_INPUT_CHARS) return@withContext null
+        val summarizer = client(context, SummarizerOptions.OutputType.ONE_BULLET)
+        val bullets = client(context, SummarizerOptions.OutputType.THREE_BULLETS)
+        try {
+            val status = summarizer.checkFeatureStatus().get(WAIT_SECONDS, TimeUnit.SECONDS)
+            if (status == FeatureStatus.UNAVAILABLE || status == FeatureStatus.DOWNLOADING) return@withContext null
+            val title = clean(
+                summarizer.runInference(SummarizationRequest.builder(input).build()).get(WAIT_SECONDS, TimeUnit.SECONDS).summary
+            )
+            val points = runCatching {
+                bullets.runInference(SummarizationRequest.builder(input).build()).get(WAIT_SECONDS, TimeUnit.SECONDS).summary
+            }.getOrNull()?.let(::bulletList).orEmpty()
+            title to points
+        } catch (e: Exception) {
+            null
+        } finally {
+            summarizer.close()
+            bullets.close()
         }
     }
 

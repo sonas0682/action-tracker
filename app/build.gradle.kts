@@ -77,6 +77,9 @@ dependencies {
     implementation("com.google.mlkit:genai-summarization:1.0.0-beta1")
     // On-device Gemini Nano proofreading (voice input mode) to tidy spoken task titles
     implementation("com.google.mlkit:genai-proofreading:1.0.0-beta1")
+    // Photo to task: on-device text recognition (bundled model) and date/time extraction
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.mlkit:entity-extraction:16.0.0-beta5")
 
     // Background sync
     implementation("androidx.work:work-runtime-ktx:2.10.0")

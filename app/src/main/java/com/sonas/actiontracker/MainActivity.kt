@@ -1,6 +1,8 @@
 package com.sonas.actiontracker
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.graphics.Color
 import android.os.Bundle
@@ -105,6 +107,7 @@ class MainActivity : FragmentActivity() {
         Backup.schedule(this)
         SeriesWorker.schedule(this)
         offerRestoreOnFreshInstall(prefs)
+        if (savedInstanceState == null) takeSharedPhoto(intent)
         setContent {
             AppTheme {
                 if (unlocked) {
@@ -138,6 +141,23 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeSharedPhoto(intent)
+    }
+
+    /** A photo or screenshot shared into the app is read into a draft action (Photo to task). */
+    private fun takeSharedPhoto(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("image/") != true) return
+        val uri: Uri? = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+        }
+        uri?.let { vm.sharedPhoto = it }
     }
 
     override fun onStart() {
