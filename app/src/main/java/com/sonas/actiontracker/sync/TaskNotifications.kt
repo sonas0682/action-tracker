@@ -170,7 +170,7 @@ object TaskNotifications {
             ?: intent.getLongExtra(EXTRA_ITEM, -1).takeIf { it > 0 }?.let { longArrayOf(it) }
             ?: return
         val dao = Db.get(context).dao()
-        val open = ids.mapNotNull { dao.byId(it)?.takeIf { item -> item.status == STATUS_OPEN } }
+        val open = ids.toList().mapNotNull { dao.byId(it)?.takeIf { item -> item.status == STATUS_OPEN } }
         SlotReminders.ensureChannel(context)
         val tag = intent.getStringExtra(EXTRA_TAG) ?: "${TAG_PREFIX}snoozed"
         val channel = intent.getStringExtra(EXTRA_CHANNEL) ?: SlotReminders.CHANNEL
