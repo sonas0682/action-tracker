@@ -34,6 +34,7 @@ import com.sonas.actiontracker.sync.Notify
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SeriesWorker
 import com.sonas.actiontracker.sync.SlotReminders
+import com.sonas.actiontracker.sync.TaskNotifications
 import com.sonas.actiontracker.sync.SyncWorker
 import com.sonas.actiontracker.ui.AppScreen
 import com.sonas.actiontracker.ui.AppTheme
@@ -77,7 +78,9 @@ class MainActivity : FragmentActivity() {
         }
 
     private val notifPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) TaskNotifications.showQuickAdd(this)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The UI is always light, so keep dark system-bar icons whatever the system theme.
@@ -101,6 +104,7 @@ class MainActivity : FragmentActivity() {
         reminders = Reminders.settings(this)
         Reminders.schedule(this)
         SlotReminders.schedule(this)
+        TaskNotifications.showQuickAdd(this)
         Backup.schedule(this)
         SeriesWorker.schedule(this)
         offerRestoreOnFreshInstall(prefs)

@@ -1,22 +1,13 @@
 package com.sonas.actiontracker.sync
 
-import android.Manifest
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.sonas.actiontracker.MainActivity
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import java.time.LocalDate
@@ -25,8 +16,8 @@ import java.time.LocalTime
 import java.util.concurrent.TimeUnit
 
 /**
- * Daily due-date reminder: once a day, at or after the chosen time, posts one
- * notification listing open actions that are due today or overdue.
+ * Daily due-date reminder: once a day, at or after the chosen time, posts a summary of
+ * open actions that are due today or overdue, with a Done/Snooze notification per task.
  *
  * A short periodic check (rather than one 24 h job) keeps the time right across
  * daylight-saving changes and still fires if the phone was off at reminder time.
@@ -36,8 +27,6 @@ object Reminders {
     private const val PREFS = "reminders"
     private const val WORK = "due_reminders"
     private const val CHANNEL = "due_reminders"
-    private const val NOTIFICATION_ID = 10
-    private const val MAX_LINES = 5
 
     data class Settings(val enabled: Boolean, val time: LocalTime)
 
@@ -87,48 +76,10 @@ object Reminders {
     }
 
     private fun post(context: Context, due: List<Item>, today: LocalDate) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) return
         ensureChannel(context)
-
-        val todayEpoch = today.toEpochDay()
-        val overdue = due.count { it.dueDate < todayEpoch }
-        val dueToday = due.size - overdue
-        val title = summary(dueToday, overdue)
-
-        val open = PendingIntent.getActivity(
-            context, NOTIFICATION_ID, Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val style = NotificationCompat.InboxStyle().setBigContentTitle(title)
-        due.take(MAX_LINES).forEach { item ->
-            val who = if (item.person != "Me") " · ${item.person}" else ""
-            val late = if (item.dueDate < todayEpoch) "Overdue: " else ""
-            style.addLine("$late${item.title}$who")
-        }
-        if (due.size > MAX_LINES) style.setSummaryText("+${due.size - MAX_LINES} more")
-
-        // The lock screen shows only the count; titles stay hidden until the phone is unlocked.
-        val public = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("Action Tracker")
-            .setContentText(title)
-            .build()
-
-        val n = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle(title)
-            .setContentText(due.first().title)
-            .setStyle(style)
-            .setNumber(due.size)
-            .setCategory(Notification.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(public)
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .build()
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, n)
+        val overdue = due.count { it.dueDate < today.toEpochDay() }
+        val title = summary(due.size - overdue, overdue)
+        TaskNotifications.postGroup(context, TaskNotifications.digestTag(), CHANNEL, title, due, today, urgent = false)
     }
 
     internal fun summary(dueToday: Int, overdue: Int): String {

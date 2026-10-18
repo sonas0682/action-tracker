@@ -28,6 +28,16 @@ object VoiceDraft {
     private const val NANO_TIMEOUT_SECONDS = 8L
     private const val MAX_TITLE_CHARS = 120
 
+    /** People and contexts the app offers before any have been typed. */
+    val DEFAULT_PEOPLE = listOf("Me", "Nathiya", "Vibu", "Dharshu")
+    val DEFAULT_CONTEXTS = listOf("Work", "Family", "Kids/School")
+
+    /** Every person/context used so far, most recent first, then the built-in defaults; deduped ignoring case. */
+    fun recentValues(items: List<Item>, defaults: List<String>, pick: (Item) -> String): List<String> =
+        (items.sortedByDescending { it.createdAt }.map { pick(it).trim() } + defaults)
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
+
     suspend fun build(
         context: Context,
         transcript: String,
@@ -35,11 +45,20 @@ object VoiceDraft {
         contexts: List<String>,
         today: LocalDate = LocalDate.now()
     ): Draft {
+        val rules = fromRules(transcript, people, contexts, today)
+        val nanoTitle = tidy(context, rules.title)
+        val item = if (nanoTitle != null) rules.copy(title = nanoTitle.take(MAX_TITLE_CHARS)) else rules
+        return Draft(item, transcript.trim(), nanoTitle != null)
+    }
+
+    /**
+     * The draft from the rules alone, without Gemini Nano. Used as-is where Nano can't run,
+     * such as a reply typed or dictated into a notification (for example on a watch).
+     */
+    fun fromRules(transcript: String, people: List<String>, contexts: List<String>, today: LocalDate): Item {
         val text = transcript.trim()
-        val ruleTitle = title(text)
-        val nanoTitle = tidy(context, ruleTitle)
-        val item = Item(
-            title = (nanoTitle ?: ruleTitle).take(MAX_TITLE_CHARS),
+        return Item(
+            title = title(text).take(MAX_TITLE_CHARS),
             notes = "Voice: $text",
             person = person(text, people),
             context = context(text, contexts),
@@ -48,7 +67,6 @@ object VoiceDraft {
             source = "VOICE",
             recurrence = recurrence(text).name
         )
-        return Draft(item, text, nanoTitle != null)
     }
 
     // ------------------------------------------------------------------ due date

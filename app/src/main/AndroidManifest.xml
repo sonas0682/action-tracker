@@ -47,6 +47,10 @@
         </receiver>
 
         <receiver
+            android:name=".sync.TaskActionReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".widget.DueWidgetReceiver"
             android:exported="true"
             android:label="Action Tracker">
