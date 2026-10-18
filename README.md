@@ -75,8 +75,9 @@ Nano only runs while the app is open, and only on phones that support it.
 ## Features
 
 - **Thumb-first layout**: the top bar only shows the Late / Today / Open / Inbox counts. Everything
-  you tap is at the bottom: the type bar, then a tools row (group-by, or "Add all" on Suggested, on
-  the left; calendar/stats, sync and ⋮ on the right), then the Actions | Suggested tabs. The list is
+  you tap is at the bottom: a tools row (group-by, or "Add all" on Suggested, on the left; today's
+  date in the middle; calendar/stats, sync and ⋮ on the right), then the type bar, then the
+  Actions | Suggested tabs. The list is
   anchored to the bottom so the most urgent task is right above your thumb. Calendar and Stats use
   the same layout: month switcher and close above the Calendar | Stats tabs.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair

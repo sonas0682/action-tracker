@@ -597,10 +597,10 @@ private fun TopBar(counts: List<Int>, open: List<Item>) {
 }
 
 /**
- * Everything the thumb touches, at the bottom, most used lowest: the type-to-capture bar (with its
- * live chips), a tools row (group-by on Actions or "Add all" on Suggested on the left; calendar/stats,
- * sync and menu on the right, under the right thumb), then the Actions | Suggested tabs. While the
- * keyboard is up only the bar shows. On wide windows it is one row: tabs, bar, then the tools.
+ * Everything the thumb touches, at the bottom: a tools row (group-by on Actions or "Add all" on
+ * Suggested on the left, today's date in the middle, calendar/stats, sync and menu on the right under
+ * the right thumb), then the type-to-capture bar (with its live chips), then the Actions | Suggested
+ * tabs. While the keyboard is up only the bar shows. On wide windows it is one row: tabs, bar, then the tools.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -640,23 +640,41 @@ private fun BottomDock(
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!typing) ToolsRow(contextual, tools, middle = { TodayLabel() })
                 CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.fillMaxWidth())
-                if (!typing) {
-                    ToolsRow(contextual, tools)
-                    HomeTabs(tab, counts, onTab, Modifier.fillMaxWidth())
-                }
+                if (!typing) HomeTabs(tab, counts, onTab, Modifier.fillMaxWidth())
             }
         }
     }
 }
 
-/** A screen's contextual chip on the left and its icon buttons on the right, sitting on top of its tabs. */
+/**
+ * A screen's contextual chip on the left, its icon buttons on the right and an optional [middle]
+ * (today's date on the main screen) centred in the space between them.
+ */
 @Composable
-internal fun ToolsRow(contextual: @Composable () -> Unit, tools: @Composable () -> Unit) {
+internal fun ToolsRow(
+    contextual: @Composable () -> Unit,
+    tools: @Composable () -> Unit,
+    middle: (@Composable () -> Unit)? = null
+) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { contextual() }
+        contextual()
+        Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) { middle?.invoke() }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { tools() }
     }
+}
+
+/** Today's date ("Sun, Oct 18") for the gap in the tools row; ellipsizes rather than crowd the icons. */
+@Composable
+private fun TodayLabel() {
+    Text(
+        LocalDate.now().format(DAY_FORMAT),
+        style = MaterialTheme.typography.titleSmall,
+        color = Fresh.TextDim,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 /** Small glass chip used for the dock's contextual action ("Add all"). */
@@ -872,15 +890,15 @@ private fun StatsStrip(open: List<Item>, inbox: Int, modifier: Modifier = Modifi
 private fun MiniStat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
     val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
     Row(
-        modifier.height(28.dp).glass(PILL).padding(horizontal = 8.dp),
+        modifier.height(44.dp).glass(RoundedCornerShape(14.dp)).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("${shown.toInt()}", style = MaterialTheme.typography.titleSmall, color = color, maxLines = 1)
-        Spacer(Modifier.width(5.dp))
+        Text("${shown.toInt()}", style = MaterialTheme.typography.titleLarge, color = color, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
         Text(
             label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = Fresh.TextDim,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

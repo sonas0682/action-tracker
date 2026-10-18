@@ -10,12 +10,12 @@ paths:
 App
 - Light "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
   accents. Not a traditional Material look, and not dark.
-- Thumb-first (since 2026-10-18): the slim top bar holds only the Late/Today/Open/Inbox pills.
-  Everything tappable is in the bottom dock, most used lowest: type-to-capture bar, then a tools
-  row (left: contextual chip, group-by on Actions or "Add all" on Suggested; right: calendar/stats,
-  sync, ⋮ under the right thumb), then the Actions | Suggested tabs. Icons never shrink or get
-  covered. On wide/landscape windows the dock is one row: tabs, type bar, tools. While the keyboard
-  is up only the type bar shows.
+- Thumb-first (since 2026-10-18): the slim top bar holds only the Late/Today/Open/Inbox pills
+  (44dp tall, big numbers). Everything tappable is in the bottom dock: a tools row (left:
+  contextual chip, group-by on Actions or "Add all" on Suggested; middle: today's date; right:
+  calendar/stats, sync, ⋮ under the right thumb), then the type-to-capture bar, then the
+  Actions | Suggested tabs. Icons never shrink or get covered. On wide/landscape windows the dock
+  is one row: tabs, type bar, tools. While the keyboard is up only the type bar shows.
 - Calendar and Stats (`ui/Insights.kt`) mirror it: content on top; bottom dock with the month
   switcher left and close right (where the calendar icon sits on the main screen), then the
   Calendar | Stats tabs.
