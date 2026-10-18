@@ -2,21 +2,24 @@
 
 Personal Android action-item tracker for one user (Sona, Samsung Galaxy S25 Ultra).
 Kotlin 2 + Jetpack Compose (Material 3), single `:app` module, package `com.sonas.actiontracker`,
-minSdk 30, target/compile SDK 35. Feature overview and Google Cloud setup are in `README.md`.
+minSdk 30 (Android 11), target/compile SDK 36 (Google Play requirement). Feature overview and Google Cloud setup are in `README.md`.
 
 ## Build and test
 
-There is no Gradle wrapper in the repo; CI uses Gradle 8.9 with JDK 17.
+There is no Gradle wrapper in the repo; CI uses Gradle 8.11.1 with JDK 17 (AGP 8.10).
 
 ```bash
 gradle :app:testDebugUnitTest --no-daemon   # JVM unit tests (app/src/test)
 gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk/debug/
+gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/bundle/release/
 ```
 
 - Both need the Android SDK. Cloud sessions can't download it (dl.google.com is blocked), so
   there the GitHub Actions run is the build check: don't claim a change compiles until it is green.
 - `.github/workflows/build.yml` ("Build APK") runs on every push to `main`, every PR and manual
-  dispatch: unit tests, then `assembleDebug`, uploading the `action-tracker-debug-apk` artifact.
+  dispatch: unit tests, `assembleDebug` and `bundleRelease`, uploading the `action-tracker-debug-apk`
+  and `action-tracker-release-aab` artifacts. The bundle's versionCode is the run number
+  (`VERSION_CODE`); the debug APK stays at versionCode 1 so it installs over earlier APKs.
 - The debug APK is signed with the stable key from repo secrets (`KEYSTORE_BASE64`,
   `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`). Its SHA-1 is registered on the Google OAuth
   Android client, so Gmail/Calendar/Drive sign-in only works with CI-signed builds.
@@ -31,7 +34,8 @@ gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk
 | `MainActivity.kt` | Fingerprint lock (pref `lock_enabled`, off by default), Google auth hand-off, crash-trace screen (`showLastCrash`) |
 | `data/Data.kt` | Room `Db` (SQLCipher), `Item`/`Processed` entities, `ItemDao`, `DB_VERSION`, all migrations, `DbKey` (Keystore-wrapped passphrase), `TimeOfDay` |
 | `data/Recurrence.kt` | `Recurrence` rules, `Series` (repeating rows kept 3 months ahead; scoped save / delete / undo) and `Actions` (complete / reopen) |
-| `sync/Google.kt`, `Extractor.kt`, `Sync.kt` | Gmail + Calendar REST, rule-based extraction, `SyncWorker` (~2 h) and notifications |
+| `sync/Google.kt`, `Extractor.kt`, `Sync.kt` | Gmail + Calendar REST (each source switchable; declined scopes switch it off), rule-based extraction, `SyncWorker` (~2 h) and notifications |
+| `sync/Features.kt`, `ui/Permissions.kt` | ⋮ → Permissions & features: On / Basic / Off per permission, Google source and on-device model, with Fix buttons |
 | `sync/SmartTitles.kt` | Gemini Nano summarization: email titles and three-bullet summaries |
 | `sync/VoiceDraft.kt` | Spoken sentence to draft `Item` (rules + Nano proofreading) |
 | `sync/PhotoDraft.kt` | Photo, shared image or shared text to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
@@ -59,6 +63,9 @@ gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk
   build features on it; summarization and proofreading are available.
 - **Privacy**: everything stays on the phone or in encrypted backups. See
   `.claude/rules/privacy-and-secrets.md`.
+- **Permissions**: the app must work on any Android 11+ device with any permission denied or
+  Nano missing. A new permission, scope or model needs a row in `Features` and in the README
+  permissions tables saying what stops working without it. No `USE_EXACT_ALARM` (Play-restricted).
 - **UI**: follow `.claude/rules/ui-style.md` (slim top bar, icon-only +, swipe delete with Undo).
 
 ## Workflow

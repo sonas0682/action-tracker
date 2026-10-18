@@ -18,16 +18,56 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.Base64
 
+/**
+ * Gmail and Calendar access. Each source can be switched off on its own (⋮ → Permissions &
+ * features), and a source the user unticks on Google's consent screen is switched off too, so
+ * the app only ever asks for what is on and the other source keeps working.
+ */
 object GoogleAuth {
-    private val scopes = listOf(
-        Scope("https://www.googleapis.com/auth/gmail.readonly"),
-        Scope("https://www.googleapis.com/auth/calendar.readonly")
-    )
+    const val GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+    const val CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+    private const val PREFS = "google_sources"
 
-    suspend fun authorize(context: Context): AuthorizationResult =
-        Identity.getAuthorizationClient(context)
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun gmailOn(context: Context) = prefs(context).getBoolean("gmail", true)
+    fun calendarOn(context: Context) = prefs(context).getBoolean("calendar", true)
+    fun setGmail(context: Context, on: Boolean) = prefs(context).edit().putBoolean("gmail", on).apply()
+    fun setCalendar(context: Context, on: Boolean) = prefs(context).edit().putBoolean("calendar", on).apply()
+
+    /** True once a sync has been granted at least one source, for the Permissions & features screen. */
+    fun everGranted(context: Context) = prefs(context).getBoolean("granted_once", false)
+
+    /** The scopes to ask for: only the sources that are switched on. */
+    fun wanted(context: Context): List<String> = buildList {
+        if (gmailOn(context)) add(GMAIL_SCOPE)
+        if (calendarOn(context)) add(CALENDAR_SCOPE)
+    }
+
+    /** Null when both Gmail and Calendar are switched off, so there is nothing to ask for. */
+    suspend fun authorize(context: Context): AuthorizationResult? {
+        val scopes = wanted(context).ifEmpty { return null }.map(::Scope)
+        return Identity.getAuthorizationClient(context)
             .authorize(AuthorizationRequest.builder().setRequestedScopes(scopes).build())
             .await()
+    }
+
+    /**
+     * After the consent screen: switches off any source the user didn't allow, so the next
+     * sync doesn't ask again, and returns their names ("Gmail", "Calendar") for a message.
+     */
+    fun recordGrant(context: Context, granted: Collection<String>): List<String> {
+        val requested = wanted(context)
+        val declined = declined(requested, granted)
+        if (GMAIL_SCOPE in declined) setGmail(context, false)
+        if (CALENDAR_SCOPE in declined) setCalendar(context, false)
+        if (requested.any { it in granted }) prefs(context).edit().putBoolean("granted_once", true).apply()
+        return declined.map { if (it == GMAIL_SCOPE) "Gmail" else "Calendar" }
+    }
+
+    /** The requested scopes missing from the grant. */
+    fun declined(requested: Collection<String>, granted: Collection<String>): List<String> =
+        requested.filter { it !in granted }
 }
 
 private fun httpGet(url: String, token: String): String {

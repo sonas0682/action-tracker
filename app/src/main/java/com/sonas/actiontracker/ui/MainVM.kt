@@ -17,6 +17,7 @@ import com.sonas.actiontracker.data.Snapshot
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.sync.Backup
+import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
 import com.sonas.actiontracker.widget.DueWidget
@@ -192,19 +193,25 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     /** Runs the on-device Gemini Nano title pass over new Gmail suggestions. Needs the app in the foreground. */
     fun smartTitles() = viewModelScope.launch { runCatching { SmartTitles.run(getApplication()) } }
 
-    fun sync(token: String) {
+    /** [granted] is the scopes Google returned; [declined] names any source the user didn't allow. */
+    fun sync(token: String, granted: Collection<String>, declined: List<String> = emptyList()) {
         if (syncing) return
         viewModelScope.launch {
             syncing = true
-            message = try {
-                val n = SyncEngine.run(getApplication(), token)
+            val result = try {
+                val n = SyncEngine.run(getApplication(), token, granted)
                 if (n > 0) "$n new suggestion(s) to review" else "Nothing new"
             } catch (e: Exception) {
                 "Sync failed: ${e.message}"
             }
+            message = if (declined.isEmpty()) result
+            else "$result. ${declined.joinToString(" and ")} not allowed, so " +
+                (if (declined.size == 2) "suggestions are" else "its suggestions are") +
+                " off. Turn back on under ⋮ → Permissions & features."
             syncing = false
             // Nano passes are best effort: a failure keeps the rule-based titles and retries next time.
             runCatching { SmartTitles.run(getApplication()) }
+            if (GoogleAuth.GMAIL_SCOPE !in granted) return@launch
             val backfilled = runCatching { SmartTitles.backfill(getApplication(), token) }.getOrDefault(0)
             if (backfilled > 0) message = "Added email summaries to $backfilled earlier item(s)"
         }

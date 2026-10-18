@@ -12,14 +12,17 @@ val ciKeystorePath: String? = System.getenv("KEYSTORE_PATH")
 
 android {
     namespace = "com.sonas.actiontracker"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.sonas.actiontracker"
         minSdk = 30
-        targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Google Play requires a target of Android 16 (API 36) for new apps and updates from Aug 31, 2026.
+        targetSdk = 36
+        // CI sets VERSION_CODE (the run number) for the Play bundle so every upload is higher;
+        // the sideloaded debug APK stays at 1 so it keeps installing over earlier debug builds.
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -39,6 +42,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            // Play upload key: the same CI key. With Play App Signing, Google re-signs the app,
+            // so the Play signing SHA-1 needs its own OAuth Android client (see README).
+            if (ciKeystorePath != null) signingConfig = signingConfigs.getByName("ci")
         }
     }
 

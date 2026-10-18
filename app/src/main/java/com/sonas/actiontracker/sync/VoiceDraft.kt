@@ -398,18 +398,30 @@ object VoiceDraft {
 
     // ------------------------------------------------------------------ Gemini Nano
 
+    /** Gemini Nano proofreading on this phone, as a [FeatureStatus] value; null if it can't be read. */
+    suspend fun proofreadStatus(context: Context): Int? = withContext(Dispatchers.IO) {
+        val proofreader = proofreaderClient(context)
+        try {
+            runCatching { proofreader.checkFeatureStatus().get(NANO_TIMEOUT_SECONDS, TimeUnit.SECONDS) }.getOrNull()
+        } finally {
+            proofreader.close()
+        }
+    }
+
+    private fun proofreaderClient(context: Context) = Proofreading.getClient(
+        ProofreaderOptions.builder(context)
+            .setInputType(ProofreaderOptions.InputType.VOICE)
+            .setLanguage(ProofreaderOptions.Language.ENGLISH)
+            .build()
+    )
+
     /**
      * Gemini Nano proofreading tuned for speech input. Returns null when Nano is not
      * ready on this phone or takes too long, so the rule-based title is kept.
      */
     private suspend fun tidy(context: Context, title: String): String? = withContext(Dispatchers.IO) {
         if (title.isBlank()) return@withContext null
-        val proofreader = Proofreading.getClient(
-            ProofreaderOptions.builder(context)
-                .setInputType(ProofreaderOptions.InputType.VOICE)
-                .setLanguage(ProofreaderOptions.Language.ENGLISH)
-                .build()
-        )
+        val proofreader = proofreaderClient(context)
         try {
             val status = proofreader.checkFeatureStatus().get(NANO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             // DOWNLOADABLE: the first request starts the download; if it isn't done in time the rules' title stays.

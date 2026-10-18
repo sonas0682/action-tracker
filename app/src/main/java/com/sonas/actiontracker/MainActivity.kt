@@ -14,6 +14,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
@@ -58,7 +59,12 @@ class MainActivity : FragmentActivity() {
     private val authLauncher =
         registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
             runCatching { Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(res.data) }
-                .onSuccess { r -> r.accessToken?.let { vm.sync(it) } }
+                .onSuccess { r ->
+                    val declined = GoogleAuth.recordGrant(this, r.grantedScopes)
+                    val token = r.accessToken
+                    if (token != null && r.grantedScopes.isNotEmpty()) vm.sync(token, r.grantedScopes, declined)
+                    else vm.message = "Gmail and Calendar weren't allowed, so there are no suggestions. Turn them on under ⋮ → Permissions & features."
+                }
                 .onFailure { vm.message = "Google sign-in cancelled" }
         }
 
@@ -114,8 +120,15 @@ class MainActivity : FragmentActivity() {
                         onSync = ::startSync,
                         lockEnabled = lockEnabled,
                         onLockChange = {
-                            lockEnabled = it
-                            prefs.edit().putBoolean("lock_enabled", it).apply()
+                            // Without a fingerprint, face or PIN the lock could never be opened.
+                            val canLock = BiometricManager.from(this).canAuthenticate(BIOMETRIC_STRONG or DEVICE_CREDENTIAL) ==
+                                BiometricManager.BIOMETRIC_SUCCESS
+                            if (it && !canLock) {
+                                vm.message = "Set up a fingerprint, face or PIN in Android settings first, then turn the lock on."
+                            } else {
+                                lockEnabled = it
+                                prefs.edit().putBoolean("lock_enabled", it).apply()
+                            }
                         },
                         onOpenBackup = {
                             vm.refreshBackupStatus()
@@ -221,11 +234,12 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch {
             runCatching { GoogleAuth.authorize(this@MainActivity) }
                 .onSuccess { r ->
-                    val pending = r.pendingIntent
-                    if (r.hasResolution() && pending != null) {
-                        authLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
-                    } else {
-                        r.accessToken?.let { vm.sync(it) }
+                    val pending = r?.pendingIntent
+                    when {
+                        r == null -> vm.message = "Gmail and Calendar are both off. Turn one on under ⋮ → Permissions & features."
+                        r.hasResolution() && pending != null ->
+                            authLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                        else -> r.accessToken?.let { vm.sync(it, r.grantedScopes) }
                     }
                 }
                 .onFailure { vm.message = "Google sign-in failed: ${it.message}" }
