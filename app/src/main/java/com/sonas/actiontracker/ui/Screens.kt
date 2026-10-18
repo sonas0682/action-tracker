@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -396,7 +397,7 @@ fun AppScreen(
             // nearest the thumb. Side insets keep it clear of the camera cutout in landscape.
             Column(
                 Modifier.fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             ) {
                 TopBar(counts = listOf(open.size, suggested.size), open = open)
                 AnimatedVisibility(
@@ -591,10 +592,18 @@ fun AppScreen(
 /** The slim top bar: just the Late / Today / Open / Inbox pills, read at a glance. Calendar and Stats show it too. */
 @Composable
 internal fun TopBar(counts: List<Int>, open: List<Item>) {
-    StatsStrip(
-        open, inbox = counts[1],
-        Modifier.fillMaxWidth().widthIn(max = 720.dp).padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
-    )
+    // Its own white panel, running up under the status bar, with rounded lower corners.
+    Box(
+        // zIndex keeps its shadow above the list, which is drawn after it.
+        Modifier.fillMaxWidth().zIndex(1f).panel(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
+        contentAlignment = Alignment.Center
+    ) {
+        StatsStrip(
+            open, inbox = counts[1],
+            Modifier.fillMaxWidth().widthIn(max = 720.dp).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp)
+        )
+    }
 }
 
 /**
@@ -621,8 +630,9 @@ private fun BottomDock(
     val typing = WindowInsets.isImeVisible
     BoxWithConstraints(
         Modifier.fillMaxWidth()
+            .panel(DOCK_SHAPE)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp)
     ) {
         val wide = maxWidth >= 600.dp
         if (wide) {
@@ -648,6 +658,9 @@ private fun BottomDock(
         }
     }
 }
+
+/** The bottom dock's white panel: rounded top corners, running down under the navigation bar. */
+internal val DOCK_SHAPE = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
 /**
  * A screen's contextual chip on the left, its icon buttons on the right and an optional [middle]
@@ -682,7 +695,7 @@ private fun TodayLabel() {
 @Composable
 private fun DockChip(label: String, icon: ImageVector, tint: Color, onClick: () -> Unit) {
     Row(
-        Modifier.height(36.dp).glass(PILL).clickable(onClick = onClick).padding(start = 10.dp, end = 14.dp),
+        Modifier.height(36.dp).well(PILL).clickable(onClick = onClick).padding(start = 10.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
@@ -727,7 +740,7 @@ private fun CaptureBar(
             shown?.let { DraftChips(it) }
         }
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 50.dp).glass(RoundedCornerShape(18.dp), strong = true)
+            Modifier.fillMaxWidth().heightIn(min = 50.dp).well(RoundedCornerShape(18.dp))
                 .padding(start = 16.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -808,7 +821,7 @@ private fun DraftChips(item: Item) {
 @Composable
 private fun InfoChip(label: String, dot: Color) {
     Row(
-        Modifier.height(28.dp).glass(PILL, strong = true).padding(start = 9.dp, end = 11.dp),
+        Modifier.height(28.dp).well(PILL).padding(start = 9.dp, end = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
@@ -824,7 +837,7 @@ private fun InfoChip(label: String, dot: Color) {
 @Composable
 private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.height(46.dp).glass(PILL).padding(3.dp),
+        modifier.height(46.dp).well(PILL).padding(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TAB_LABELS.forEachIndexed { i, label ->
@@ -891,7 +904,10 @@ private fun StatsStrip(open: List<Item>, inbox: Int, modifier: Modifier = Modifi
 private fun MiniStat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
     val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
     Row(
-        modifier.height(44.dp).glass(RoundedCornerShape(14.dp)).padding(horizontal = 8.dp),
+        // Tinted in the stat's own colour, so the pills read as numbers, not as buttons or rows.
+        modifier.height(44.dp).clip(RoundedCornerShape(14.dp))
+            .background((if (color == Fresh.Text) Fresh.Indigo else color).copy(alpha = 0.10f))
+            .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -913,7 +929,7 @@ private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.height(32.dp).glass(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
+            Modifier.height(36.dp).well(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("By ${group.label.lowercase()}", style = MaterialTheme.typography.labelLarge, color = Fresh.Text, maxLines = 1)
@@ -945,7 +961,7 @@ private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
 @Composable
 internal fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
     Box(
-        Modifier.size(36.dp).glass(CircleShape).clickable(enabled = enabled, onClick = onClick),
+        Modifier.size(36.dp).well(CircleShape).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { content() }
 }
@@ -1015,7 +1031,7 @@ internal fun TabSwitcher(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    BoxWithConstraints(modifier.height(40.dp).glass(PILL).padding(3.dp)) {
+    BoxWithConstraints(modifier.height(40.dp).well(PILL).padding(3.dp)) {
         val segment = maxWidth / labels.size
         val x by animateDpAsState(segment * tab, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow), label = "tab")
         Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Fresh.accentHorizontal))

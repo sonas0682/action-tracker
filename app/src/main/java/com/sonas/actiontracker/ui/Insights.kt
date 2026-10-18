@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -100,7 +102,7 @@ fun InsightsScreen(
 
     // Same thumb-first layout as the main screen: content on top, controls in a bottom dock with
     // the month switcher and close (where the calendar icon sits on the main screen) above the tabs.
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         // The same Late / Today / Open / Inbox pills as the main screen, so the numbers stay in view.
         topBar()
         Column(
@@ -118,7 +120,9 @@ fun InsightsScreen(
             }
         }
         Column(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().panel(DOCK_SHAPE)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ToolsRow(

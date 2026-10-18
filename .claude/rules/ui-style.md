@@ -19,6 +19,10 @@ App
 - Calendar and Stats (`ui/Insights.kt`) mirror it: the same stats top bar, then content; bottom dock with the month
   switcher left and close right (where the calendar icon sits on the main screen), then the
   Calendar | Stats tabs.
+- Three zones, visibly separate: the stats bar and the bottom dock are solid white `panel()`s
+  (rounded inner corners, soft indigo shadow, running under the system bars); the list between
+  them stays on the aurora canvas. Controls on a panel use `well()` (canvas tint + rim), and the
+  stat pills are tinted in their own colour, so pills, controls and list rows never look alike.
 - No tall headlines or stat tiles. Both tabs always show a count badge, dimmed at zero, so nothing
   reflows on switch.
 - The Actions list is anchored to the bottom (`reverseLayout`): the first section's first row sits
