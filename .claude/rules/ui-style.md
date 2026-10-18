@@ -10,13 +10,17 @@ paths:
 App
 - Light "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
   accents. Not a traditional Material look, and not dark.
-- Thumb-first (since 2026-10-18): one slim top bar holds only the date and the calendar/stats,
-  sync and ⋮ icons (icons never shrink or get covered). Everything used often is in the bottom
-  dock: type-to-capture bar, then the Late/Today/Open/Inbox pills, then the Actions | Suggested
-  tabs (nearest the thumb). On wide/landscape windows the pills move to the top bar and the tabs
-  share one row with the type bar. While the keyboard is up only the type bar shows.
+- Thumb-first (since 2026-10-18): the slim top bar holds only the Late/Today/Open/Inbox pills.
+  Everything tappable is in the bottom dock, most used lowest: type-to-capture bar, then a tools
+  row (left: contextual chip, group-by on Actions or "Add all" on Suggested; right: calendar/stats,
+  sync, ⋮ under the right thumb), then the Actions | Suggested tabs. Icons never shrink or get
+  covered. On wide/landscape windows the dock is one row: tabs, type bar, tools. While the keyboard
+  is up only the type bar shows.
+- Calendar and Stats (`ui/Insights.kt`) mirror it: content on top; bottom dock with the month
+  switcher left and close right (where the calendar icon sits on the main screen), then the
+  Calendar | Stats tabs.
 - No tall headlines or stat tiles. Both tabs always show a count badge, dimmed at zero, so nothing
-  reflows on switch. Group-by is a small chip at the top of the Actions list, not in a bar.
+  reflows on switch.
 - The Actions list is anchored to the bottom (`reverseLayout`): the first section's first row sits
   right above the dock, later sections and Done float up. Each section emits rows, then its header.
 - Actions is the first/default tab, Suggested second. Default grouping is Date; Time, Person

@@ -43,7 +43,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
 | `sync/TaskNotifications.kt` | One notification per reminder listing its tasks (Snooze 30 min; Done only when it lists one task); no per-task notifications |
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
-| `ui/Screens.kt`, `MainVM.kt` | Main screen (slim top bar, bottom dock with type bar + tabs, bottom-anchored list, Suggested swipe deck), edit sheet, swipe-to-delete |
+| `ui/Screens.kt`, `MainVM.kt` | Main screen (stats-only top bar, bottom dock with type bar, tools row + tabs, bottom-anchored list, Suggested swipe deck), edit sheet, swipe-to-delete |
 | `ui/Insights.kt` | Calendar + stats view |
 | `ui/Voice.kt`, `Photo.kt`, `BackupUi.kt`, `Theme.kt` | Listen sheet, photo button + draft note, backup dialog, light "Fresh" palette + `glass()` |
 | `widget/DueWidget.kt` | Glance Today/Tomorrow widget |

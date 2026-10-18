@@ -397,21 +397,7 @@ fun AppScreen(
                 Modifier.fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             ) {
-                TopBar(
-                    counts = listOf(open.size, suggested.size),
-                    open = open,
-                    syncing = vm.syncing,
-                    onSync = onSync,
-                    onInsights = { insights = true },
-                    menu = {
-                        MoreMenu(
-                            lockEnabled, onLockChange,
-                            onOpenSlotReminders = { slotReminders = true },
-                            onOpenPermissions = { permissions = true },
-                            onOpenBackup = onOpenBackup
-                        )
-                    }
-                )
+                TopBar(counts = listOf(open.size, suggested.size), open = open)
                 AnimatedVisibility(
                     visible = vm.message != null,
                     enter = expandVertically() + fadeIn(),
@@ -426,7 +412,7 @@ fun AppScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         if (tab == TAB_ACTIONS) {
-                            ActionsList(actions, group, onGroup = { group = it }, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
+                            ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
                         } else {
                             SuggestedDeck(
                                 suggested, vm,
@@ -447,7 +433,6 @@ fun AppScreen(
                     tab = tab,
                     onTab = { tab = it },
                     counts = listOf(open.size, suggested.size),
-                    open = open,
                     people = people,
                     contexts = contexts,
                     usualContexts = usualContexts,
@@ -457,6 +442,22 @@ fun AppScreen(
                         tab = TAB_ACTIONS
                         saveNow(Item.blank(), draft, SeriesScope.THIS)
                         showUndo("Added \"${draft.title}\"", null)
+                    },
+                    contextual = {
+                        if (tab == TAB_ACTIONS) GroupMenu(group) { group = it }
+                        else if (suggested.isNotEmpty()) DockChip("Add all ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
+                    },
+                    tools = {
+                        GlassIconButton(onClick = { insights = true }) {
+                            Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
+                        }
+                        SyncButton(vm.syncing, onSync)
+                        MoreMenu(
+                            lockEnabled, onLockChange,
+                            onOpenSlotReminders = { slotReminders = true },
+                            onOpenPermissions = { permissions = true },
+                            onOpenBackup = onOpenBackup
+                        )
                     }
                 )
             }
@@ -586,54 +587,20 @@ fun AppScreen(
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
-/**
- * The slim top bar, only for things used now and then: today's date on the left, calendar/stats,
- * sync and menu on the right. On wide windows (landscape) the stat pills sit here too, so the
- * bottom dock stays one row.
- */
+/** The slim top bar: just the Late / Today / Open / Inbox pills, read at a glance. */
 @Composable
-private fun TopBar(
-    counts: List<Int>,
-    open: List<Item>,
-    syncing: Boolean,
-    onSync: () -> Unit,
-    onInsights: () -> Unit,
-    menu: @Composable () -> Unit
-) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val wide = maxWidth >= 600.dp
-        Row(
-            Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                LocalDate.now().format(TOP_DATE_FORMAT),
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            if (wide) {
-                StatsStrip(open, inbox = counts[1], Modifier.weight(1f))
-                Spacer(Modifier.width(12.dp))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                GlassIconButton(onClick = onInsights) {
-                    Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
-                }
-                SyncButton(syncing, onSync)
-                menu()
-            }
-        }
-    }
+private fun TopBar(counts: List<Int>, open: List<Item>) {
+    StatsStrip(
+        open, inbox = counts[1],
+        Modifier.fillMaxWidth().widthIn(max = 720.dp).padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
+    )
 }
 
-private val TOP_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE, MMM d")
-
 /**
- * Everything the thumb needs, at the bottom: the type-to-capture bar (with its live chips), the
- * stat pills and the Actions | Suggested tabs. While the keyboard is up only the bar shows. On wide
- * windows the tabs and the bar share one row and the stats move to the top bar.
+ * Everything the thumb touches, at the bottom, most used lowest: the type-to-capture bar (with its
+ * live chips), a tools row (group-by on Actions or "Add all" on Suggested on the left; calendar/stats,
+ * sync and menu on the right, under the right thumb), then the Actions | Suggested tabs. While the
+ * keyboard is up only the bar shows. On wide windows it is one row: tabs, bar, then the tools.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -641,13 +608,14 @@ private fun BottomDock(
     tab: Int,
     onTab: (Int) -> Unit,
     counts: List<Int>,
-    open: List<Item>,
     people: List<String>,
     contexts: List<String>,
     usualContexts: Map<String, String>,
     onNew: () -> Unit,
     onVoice: () -> Unit,
-    onAdd: (Item) -> Unit
+    onAdd: (Item) -> Unit,
+    contextual: @Composable () -> Unit,
+    tools: @Composable () -> Unit
 ) {
     val typing = WindowInsets.isImeVisible
     BoxWithConstraints(
@@ -658,19 +626,49 @@ private fun BottomDock(
         val wide = maxWidth >= 600.dp
         if (wide) {
             Row(verticalAlignment = Alignment.Bottom) {
-                HomeTabs(tab, counts, onTab, Modifier.width(300.dp))
+                HomeTabs(tab, counts, onTab, Modifier.width(280.dp))
                 Spacer(Modifier.width(12.dp))
                 CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.weight(1f))
+                if (!typing) {
+                    Spacer(Modifier.width(12.dp))
+                    Row(Modifier.height(50.dp), verticalAlignment = Alignment.CenterVertically) {
+                        contextual()
+                        Spacer(Modifier.width(8.dp))
+                        tools()
+                    }
+                }
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.fillMaxWidth())
                 if (!typing) {
-                    StatsStrip(open, inbox = counts[1], Modifier.fillMaxWidth())
+                    ToolsRow(contextual, tools)
                     HomeTabs(tab, counts, onTab, Modifier.fillMaxWidth())
                 }
             }
         }
+    }
+}
+
+/** A screen's contextual chip on the left and its icon buttons on the right, sitting on top of its tabs. */
+@Composable
+internal fun ToolsRow(contextual: @Composable () -> Unit, tools: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { contextual() }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { tools() }
+    }
+}
+
+/** Small glass chip used for the dock's contextual action ("Add all"). */
+@Composable
+private fun DockChip(label: String, icon: ImageVector, tint: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.height(36.dp).glass(PILL).clickable(onClick = onClick).padding(start = 10.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
     }
 }
 
@@ -1230,19 +1228,6 @@ private fun SuggestedDeck(
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "${items.size} TO REVIEW",
-                style = MaterialTheme.typography.labelSmall,
-                color = Fresh.TextDim,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = { vm.confirmAll(items) }) {
-                Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Fresh.Green)
-                Spacer(Modifier.width(4.dp))
-                Text("Add all", color = Fresh.Green, style = MaterialTheme.typography.labelLarge)
-            }
-        }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().widthIn(max = 480.dp), contentAlignment = Alignment.BottomCenter) {
             val cardHeight = minOf(maxHeight - 24.dp, 440.dp)
             // Up to two cards peek out behind the top one.
@@ -1381,7 +1366,6 @@ private data class Section(val key: String, val label: String, val items: List<I
 private fun ActionsList(
     actions: List<Item>,
     group: Group,
-    onGroup: (Group) -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
@@ -1431,12 +1415,6 @@ private fun ActionsList(
                 } else {
                     GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
                 }
-            }
-        }
-        // The group-by chip tops the list and scrolls away with it.
-        item(key = "list-head") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                GroupMenu(group, onGroup)
             }
         }
     }

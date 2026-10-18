@@ -74,15 +74,17 @@ Nano only runs while the app is open, and only on phones that support it.
 
 ## Features
 
-- **Thumb-first layout**: the Actions | Suggested tabs, the stat pills and the type bar sit at the
-  bottom of the screen, and the list is anchored to the bottom so the most urgent task is right
-  above your thumb. The slim top bar only holds the date, calendar/stats, sync and ⋮.
+- **Thumb-first layout**: the top bar only shows the Late / Today / Open / Inbox counts. Everything
+  you tap is at the bottom: the type bar, then a tools row (group-by, or "Add all" on Suggested, on
+  the left; calendar/stats, sync and ⋮ on the right), then the Actions | Suggested tabs. The list is
+  anchored to the bottom so the most urgent task is right above your thumb. Calendar and Stats use
+  the same layout: month switcher and close above the Calendar | Stats tabs.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.
 - **Suggested inbox**: tasks found in Gmail and Calendar wait here as a stack of cards. Swipe right
   to add, left to skip, up to edit first (or use the buttons under the cards), with Undo; "Add all"
-  takes them all. The same email or event is never suggested twice.
+  in the bottom tools row takes them all. The same email or event is never suggested twice.
 - **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
 - **Time of day**: each task is Morning, Afternoon, Evening or Night.
 - **Group** the list by date, time of day, person or context (Work, Family, Kids/School).
