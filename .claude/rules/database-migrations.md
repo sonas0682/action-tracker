@@ -7,7 +7,7 @@ paths:
 # Room schema and migrations
 
 - The database is Room over SQLCipher (`tracker.db`), version `DB_VERSION` in `data/Data.kt`.
-  History: v2 `body`, v3 `completedAt`, v4 `timeOfDay`, v5 `recurrence`.
+  History: v2 `body`, v3 `completedAt`, v4 `timeOfDay`, v5 `recurrence`, v6 `seriesId` / `seriesStart` / `endDate` / `endCount`.
 - `exportSchema = false`, so there are no schema JSON files; the migrations in `Db` are the
   only record of the schema history. Don't delete or rewrite an existing migration.
 - Any change to `Item` or `Processed` (new column, rename, type, new table) needs all of:

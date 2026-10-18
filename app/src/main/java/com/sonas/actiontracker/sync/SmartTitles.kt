@@ -32,6 +32,13 @@ object SmartTitles {
 
     private val lock = Mutex()
 
+    /**
+     * Upper bounds for the app-open passes, so a stuck Nano call can't hold [lock] (and every
+     * later pass) forever. Inference is allowed longer: the first request may start the model download.
+     */
+    private const val STATUS_WAIT_SECONDS = 20L
+    private const val INFERENCE_WAIT_SECONDS = 60L
+
     /** Retitles and summarizes every suggestion still holding email text. Returns how many were done. */
     suspend fun run(context: Context): Int = lock.withLock {
         withContext(Dispatchers.IO) {
@@ -42,7 +49,7 @@ object SmartTitles {
             val summarizer = client(context, SummarizerOptions.OutputType.ONE_BULLET)
             val bullets = client(context, SummarizerOptions.OutputType.THREE_BULLETS)
             try {
-                val status = summarizer.checkFeatureStatus().get()
+                val status = summarizer.checkFeatureStatus().get(STATUS_WAIT_SECONDS, TimeUnit.SECONDS)
                 // Not supported, or the model is still downloading: keep the text and try next time.
                 if (status == FeatureStatus.UNAVAILABLE || status == FeatureStatus.DOWNLOADING) return@withContext 0
 
@@ -54,12 +61,14 @@ object SmartTitles {
                     }
                     // The first request also starts the model download when status is DOWNLOADABLE.
                     val summary = runCatching {
-                        summarizer.runInference(SummarizationRequest.builder(item.body).build()).get().summary
-                    }.getOrNull() ?: return@withContext done // e.g. app went to background; retry later
+                        summarizer.runInference(SummarizationRequest.builder(item.body).build())
+                            .get(INFERENCE_WAIT_SECONDS, TimeUnit.SECONDS).summary
+                    }.getOrNull() ?: return@withContext done // e.g. app went to background or timed out; retry later
                     val title = clean(summary)
                     // A missing summary is fine: the title still improves and the notes keep the subject.
                     val points = runCatching {
-                        bullets.runInference(SummarizationRequest.builder(item.body).build()).get().summary
+                        bullets.runInference(SummarizationRequest.builder(item.body).build())
+                            .get(INFERENCE_WAIT_SECONDS, TimeUnit.SECONDS).summary
                     }.getOrNull()?.let(::bulletList).orEmpty()
                     val notes = buildString {
                         if (points.isNotEmpty()) append("Summary:\n").append(points).append("\n\n")
@@ -102,7 +111,7 @@ object SmartTitles {
             }
             val bullets = client(context, SummarizerOptions.OutputType.THREE_BULLETS)
             try {
-                val status = bullets.checkFeatureStatus().get()
+                val status = bullets.checkFeatureStatus().get(STATUS_WAIT_SECONDS, TimeUnit.SECONDS)
                 if (status == FeatureStatus.UNAVAILABLE || status == FeatureStatus.DOWNLOADING) return@withContext 0
 
                 var done = 0
@@ -115,7 +124,8 @@ object SmartTitles {
                     }.getOrNull().orEmpty().take(MAX_INPUT_CHARS)
                     if (body.length < MIN_INPUT_CHARS) continue
                     val points = runCatching {
-                        bullets.runInference(SummarizationRequest.builder(body).build()).get().summary
+                        bullets.runInference(SummarizationRequest.builder(body).build())
+                            .get(INFERENCE_WAIT_SECONDS, TimeUnit.SECONDS).summary
                     }.getOrNull() ?: return@withContext done // e.g. app went to background; retry later
                     val list = bulletList(points)
                     if (list.isEmpty()) continue

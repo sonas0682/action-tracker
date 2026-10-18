@@ -160,16 +160,17 @@ class SlotReminderReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Each step on its own: an error here would otherwise crash the app from the background.
                 when (intent.action) {
                     SlotReminders.ACTION_FIRE -> {
                         if (slot != null) runCatching { SlotReminders.fire(app, slot) }
-                        SlotReminders.schedule(app)
+                        runCatching { SlotReminders.schedule(app) }
                     }
                     Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
                     AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
-                        SlotReminders.schedule(app)
-                        Reminders.schedule(app)
-                        TaskNotifications.removeLegacy(app)
+                        runCatching { SlotReminders.schedule(app) }
+                        runCatching { Reminders.schedule(app) }
+                        runCatching { TaskNotifications.removeLegacy(app) }
                     }
                 }
             } finally {

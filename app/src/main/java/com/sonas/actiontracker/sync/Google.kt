@@ -49,13 +49,15 @@ data class CalEvent(val id: String, val summary: String, val description: String
 object Gmail {
     private const val BASE = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 
-    /** Recent inbox mail, skipping promotions and social. Only metadata + snippet are fetched. */
-    suspend fun recent(token: String): List<Mail> = withContext(Dispatchers.IO) {
+    /**
+     * Recent inbox mail, skipping promotions and social. Only metadata + snippet are fetched,
+     * and only for ids [isNew] accepts, so mail seen on an earlier sync costs no extra request.
+     */
+    suspend fun recent(token: String, isNew: suspend (String) -> Boolean = { true }): List<Mail> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode("in:inbox -category:promotions -category:social newer_than:2d", "UTF-8")
         val list = JSONObject(httpGet("$BASE?q=$q&maxResults=30", token))
         val ids = list.optJSONArray("messages") ?: return@withContext emptyList()
-        (0 until ids.length()).map { i ->
-            val id = ids.getJSONObject(i).getString("id")
+        (0 until ids.length()).map { ids.getJSONObject(it).getString("id") }.filter { isNew(it) }.map { id ->
             val msg = JSONObject(
                 httpGet("$BASE/$id?format=metadata&metadataHeaders=Subject&metadataHeaders=From", token)
             )
@@ -125,15 +127,18 @@ object Calendar {
         val url = "https://www.googleapis.com/calendar/v3/calendars/primary/events" +
             "?timeMin=$min&timeMax=$max&singleEvents=true&orderBy=startTime&maxResults=50"
         val items = JSONObject(httpGet(url, token)).optJSONArray("items") ?: return@withContext emptyList()
+        // One odd event (no id, an unexpected date format) is skipped instead of failing the whole sync.
         (0 until items.length()).mapNotNull { i ->
-            val e = items.getJSONObject(i)
-            val start = e.optJSONObject("start") ?: return@mapNotNull null
-            val date = if (start.has("dateTime")) {
-                OffsetDateTime.parse(start.getString("dateTime")).toLocalDate()
-            } else {
-                LocalDate.parse(start.getString("date"))
-            }
-            CalEvent(e.getString("id"), e.optString("summary"), e.optString("description"), date)
+            runCatching {
+                val e = items.getJSONObject(i)
+                val start = e.optJSONObject("start") ?: return@mapNotNull null
+                val date = if (start.has("dateTime")) {
+                    OffsetDateTime.parse(start.getString("dateTime")).toLocalDate()
+                } else {
+                    LocalDate.parse(start.getString("date"))
+                }
+                CalEvent(e.getString("id"), e.optString("summary"), e.optString("description"), date)
+            }.getOrNull()
         }
     }
 }

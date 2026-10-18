@@ -157,9 +157,10 @@ private fun CalendarTab(
     val first = month.atDay(1)
     val lead = first.dayOfWeek.value % 7 // Sunday-first grid
     val days = month.lengthOfMonth()
-    val inMonth = actions.filter { LocalDate.ofEpochDay(it.dueDate).let { d -> YearMonth.from(d) == month } }
-    val doneInMonth = inMonth.count { it.status == STATUS_DONE }
-    val backlog = actions.count { it.status == STATUS_OPEN && it.dueDate < today }
+    // Picking a day recomposes this tab; the month totals only change with the list, month or day.
+    val inMonth = remember(actions, month) { actions.filter { YearMonth.from(LocalDate.ofEpochDay(it.dueDate)) == month } }
+    val doneInMonth = remember(inMonth) { inMonth.count { it.status == STATUS_DONE } }
+    val backlog = remember(actions, today) { actions.count { it.status == STATUS_OPEN && it.dueDate < today } }
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         SummaryPill("$doneInMonth/${inMonth.size}", "done", Fresh.Green, Modifier.weight(1f))
