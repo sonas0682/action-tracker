@@ -1,25 +1,15 @@
 package com.sonas.actiontracker.sync
 
-import android.Manifest
 import android.app.AlarmManager
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import com.sonas.actiontracker.MainActivity
-import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
-import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.TimeOfDay
-import com.sonas.actiontracker.widget.DueWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,19 +29,13 @@ import java.time.ZoneId
  */
 object SlotReminders {
     private const val PREFS = "slot_reminders"
-    private const val CHANNEL = "time_reminders"
+    internal const val CHANNEL = "time_reminders"
     private const val NOTIFICATION_BASE = 20
-    private const val SNOOZE_BASE = 40
-    private const val MAX_LINES = 5
-    private const val SNOOZE_MINUTES = 30L
     /** A missed slot is still posted this long after its time, unless a later slot has started. */
     private const val CATCH_UP_HOURS = 2L
 
     internal const val ACTION_FIRE = "com.sonas.actiontracker.SLOT_FIRE"
-    internal const val ACTION_SNOOZE = "com.sonas.actiontracker.SLOT_SNOOZE"
-    internal const val ACTION_DONE = "com.sonas.actiontracker.SLOT_DONE"
     internal const val EXTRA_SLOT = "slot"
-    internal const val EXTRA_ITEM = "item"
 
     data class Slot(val slot: TimeOfDay, val enabled: Boolean, val time: LocalTime)
 
@@ -121,100 +105,26 @@ object SlotReminders {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val today = now.toLocalDate().toEpochDay()
         missedSlot(slots, now) { prefs.getLong("${it.name}_last_day", Long.MIN_VALUE) == today }
-            ?.let { fire(context, it, now.toLocalDate(), force = false) }
+            ?.let { fire(context, it, now.toLocalDate()) }
     }
 
     /**
-     * Posts [slot]'s reminder once per day (any number of times when [force]d, as for a snooze),
-     * reading the open actions now so ones done earlier are left out.
+     * Posts [slot]'s reminder once per day, reading the open actions now so ones done earlier
+     * are left out. Each task gets its own notification with Done and Snooze ([TaskNotifications]).
      */
-    suspend fun fire(context: Context, slot: TimeOfDay, today: LocalDate = LocalDate.now(), force: Boolean) {
+    suspend fun fire(context: Context, slot: TimeOfDay, today: LocalDate = LocalDate.now()) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val key = "${slot.name}_last_day"
-        if (!force) {
-            if (settings(context).none { it.slot == slot && it.enabled }) return
-            if (prefs.getLong(key, Long.MIN_VALUE) == today.toEpochDay()) return
-            prefs.edit().putLong(key, today.toEpochDay()).apply()
-        }
+        if (settings(context).none { it.slot == slot && it.enabled }) return
+        if (prefs.getLong(key, Long.MIN_VALUE) == today.toEpochDay()) return
+        prefs.edit().putLong(key, today.toEpochDay()).apply()
         val open = Db.get(context).dao().openDueBy(today.toEpochDay()).filter { TimeOfDay.of(it.timeOfDay) == slot }
-        if (open.isEmpty()) {
-            NotificationManagerCompat.from(context).cancel(NOTIFICATION_BASE + slot.ordinal)
-        } else {
-            post(context, slot, open, today)
-        }
-    }
-
-    fun snooze(context: Context, slot: TimeOfDay) {
-        NotificationManagerCompat.from(context).cancel(NOTIFICATION_BASE + slot.ordinal)
-        val at = LocalDateTime.now().plusMinutes(SNOOZE_MINUTES)
-        val intent = Intent(context, SlotReminderReceiver::class.java)
-            .setAction(ACTION_SNOOZE).putExtra(EXTRA_SLOT, slot.name)
-        setAlarm(
-            context, at,
-            PendingIntent.getBroadcast(context, SNOOZE_BASE + slot.ordinal, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        )
-    }
-
-    suspend fun markDone(context: Context, slot: TimeOfDay, itemId: Long) {
-        NotificationManagerCompat.from(context).cancel(NOTIFICATION_BASE + slot.ordinal)
-        Actions.complete(Db.get(context), itemId)
-        runCatching { DueWidget.refresh(context) }
+        ensureChannel(context)
+        TaskNotifications.postGroup(context, TaskNotifications.slotTag(slot.name), CHANNEL, heading(slot, open.size), open, today, urgent = true)
     }
 
     internal fun heading(slot: TimeOfDay, count: Int): String =
         "${slot.emoji} $count ${slot.label.lowercase()} ${if (count == 1) "action" else "actions"} still open"
-
-    private fun post(context: Context, slot: TimeOfDay, open: List<Item>, today: LocalDate) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) return
-        ensureChannel(context)
-
-        val id = NOTIFICATION_BASE + slot.ordinal
-        val todayEpoch = today.toEpochDay()
-        val title = heading(slot, open.size)
-        val openApp = PendingIntent.getActivity(
-            context, id, Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val style = NotificationCompat.InboxStyle().setBigContentTitle(title)
-        open.take(MAX_LINES).forEach { item ->
-            val who = if (item.person != "Me") " · ${item.person}" else ""
-            val late = if (item.dueDate < todayEpoch) "Overdue: " else ""
-            style.addLine("$late${item.title}$who")
-        }
-        if (open.size > MAX_LINES) style.setSummaryText("+${open.size - MAX_LINES} more")
-
-        // The lock screen shows only the count; titles stay hidden until the phone is unlocked.
-        val public = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("Action Tracker")
-            .setContentText(title)
-            .build()
-
-        val n = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle(title)
-            .setContentText(open.first().title)
-            .setStyle(style)
-            .setNumber(open.size)
-            .setCategory(Notification.CATEGORY_REMINDER)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(public)
-            .setContentIntent(openApp)
-            .setAutoCancel(true)
-        // "Done" only when there is exactly one action, so it is clear what it ticks off.
-        open.singleOrNull()?.let { item ->
-            val done = Intent(context, SlotReminderReceiver::class.java)
-                .setAction(ACTION_DONE).putExtra(EXTRA_SLOT, slot.name).putExtra(EXTRA_ITEM, item.id)
-            n.addAction(0, "Done", PendingIntent.getBroadcast(context, id, done, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        }
-        val snooze = Intent(context, SlotReminderReceiver::class.java)
-            .setAction(ACTION_SNOOZE).putExtra(EXTRA_SLOT, slot.name).putExtra("tap", true)
-        n.addAction(0, "Snooze 30 min", PendingIntent.getBroadcast(context, id + 100, snooze, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        NotificationManagerCompat.from(context).notify(id, n.build())
-    }
 
     private fun fireIntent(context: Context, slot: TimeOfDay?): PendingIntent {
         // One request code for every slot, so arming the next slot replaces the previous alarm.
@@ -223,7 +133,7 @@ object SlotReminders {
         return PendingIntent.getBroadcast(context, NOTIFICATION_BASE, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    private fun setAlarm(context: Context, at: LocalDateTime, pi: PendingIntent) {
+    internal fun setAlarm(context: Context, at: LocalDateTime, pi: PendingIntent) {
         val am = context.getSystemService(AlarmManager::class.java)
         val millis = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val exact = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()
@@ -233,7 +143,7 @@ object SlotReminders {
         }.onFailure { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi) }
     }
 
-    private fun ensureChannel(context: Context) {
+    internal fun ensureChannel(context: Context) {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, "Time-of-day reminders", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Pop-up reminders for open Morning, Afternoon, Evening and Night actions"
@@ -242,7 +152,7 @@ object SlotReminders {
     }
 }
 
-/** Slot alarms, snoozes and the notification's Done button; also re-arms alarms after a reboot or app update. */
+/** Slot alarms; also re-arms alarms and the "Add a task" notification after a reboot or app update. */
 class SlotReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
@@ -252,22 +162,14 @@ class SlotReminderReceiver : BroadcastReceiver() {
             try {
                 when (intent.action) {
                     SlotReminders.ACTION_FIRE -> {
-                        if (slot != null) runCatching { SlotReminders.fire(app, slot, force = false) }
+                        if (slot != null) runCatching { SlotReminders.fire(app, slot) }
                         SlotReminders.schedule(app)
-                    }
-                    SlotReminders.ACTION_SNOOZE -> if (slot != null) {
-                        // A tap on "Snooze" sets the alarm; the alarm itself re-posts the reminder.
-                        if (intent.getBooleanExtra("tap", false)) SlotReminders.snooze(app, slot)
-                        else runCatching { SlotReminders.fire(app, slot, force = true) }
-                    }
-                    SlotReminders.ACTION_DONE -> if (slot != null) {
-                        val id = intent.getLongExtra(SlotReminders.EXTRA_ITEM, -1)
-                        if (id >= 0) runCatching { SlotReminders.markDone(app, slot, id) }
                     }
                     Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
                     AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                         SlotReminders.schedule(app)
                         Reminders.schedule(app)
+                        TaskNotifications.showQuickAdd(app)
                     }
                 }
             } finally {

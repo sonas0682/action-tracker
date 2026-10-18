@@ -18,9 +18,10 @@ encrypted on the phone.
 - **Group by** date, person (Me, Nathiya, Vibu, Dharshu, or anyone), or context (Work, Family, Kids/School).
 - **No duplicates**: every Gmail message ID / calendar event ID is recorded the first time it is seen and never evaluated again, even if you dismiss the suggestion.
 - **Background sync** every ~2 hours with a notification when new suggestions arrive.
-- **Daily due-date reminder** (default 8:00 AM, change it or turn it off from the ⋮ menu): one notification listing open actions due today or overdue. The lock screen shows only the count.
+- **Daily due-date reminder** (default 8:00 AM, change it or turn it off from the ⋮ menu): a summary of open actions due today or overdue plus a notification per task (up to 5) with Done and Snooze 30 min. The lock screen shows only the count.
 - **Time of day**: every action has a Morning / Afternoon / Evening / Night slot (work contexts default to Afternoon, everything else to Evening). Group the list by Time to see them.
-- **Time-of-day reminders** (settings in the ⋮ menu): a heads-up notification per slot (12 PM, 4 PM, 7 PM and 10 PM by default) listing that slot's open actions due today or overdue, with Snooze 30 min and Done buttons.
+- **Time-of-day reminders** (settings in the ⋮ menu): a heads-up notification per slot (12 PM, 4 PM, 7 PM and 10 PM by default) listing that slot's open actions due today or overdue, plus a notification per task (up to 5) with Done and Snooze 30 min.
+- **Watch-friendly notifications**: phone notifications mirror to a paired watch (built with a Galaxy Watch 3 in mind), so Done and Snooze work from the wrist. A silent "Add a task" notification has a reply box: dictate a task on the phone or watch and it is added with the voice-capture rules (default due tomorrow). Turn it off under ⋮ → Time-of-day reminders.
 - **Repeating actions**: set Repeat (daily, weekdays, weekly, monthly, yearly) in the edit sheet, or say it ("every Monday"). Ticking one done, from the app, widget or a reminder, queues the next date; deleting one skips to the next.
 - **Voice capture**: long-press + and say the task ("remind me to sign Vibu's permission slip by Friday"); due date, person, context and repeat are picked out of the sentence, and on-device Gemini Nano tidies the title.
 - **Calendar and stats**: the calendar icon in the top bar opens a month view of due and done actions plus completion stats.

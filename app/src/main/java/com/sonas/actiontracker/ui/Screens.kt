@@ -152,6 +152,7 @@ import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SlotReminders
+import com.sonas.actiontracker.sync.TaskNotifications
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlinx.coroutines.launch
@@ -159,8 +160,6 @@ import java.time.format.DateTimeFormatter
 
 enum class Group(val label: String) { TIME("Time"), DATE("Date"), PERSON("Person"), CONTEXT("Context") }
 
-private val PEOPLE = listOf("Me", "Nathiya", "Vibu", "Dharshu")
-private val CONTEXTS = listOf("Work", "Family", "Kids/School")
 private const val DAY_MS = 86_400_000L
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
 private val PILL = RoundedCornerShape(50)
@@ -169,12 +168,6 @@ private val TAB_LABELS = listOf("Actions", "Suggested")
 private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
-
-/** Every person/context used so far, most recent first, then the built-in defaults; deduped ignoring case. */
-private fun recentValues(items: List<Item>, defaults: List<String>, pick: (Item) -> String): List<String> =
-    (items.sortedByDescending { it.createdAt }.map { pick(it).trim() } + defaults)
-        .filter { it.isNotEmpty() }
-        .distinctBy { it.lowercase() }
 
 private fun fullDate(epochDay: Long): String =
     LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("EEE, MMM d"))
@@ -411,8 +404,8 @@ fun AppScreen(
         )
     }
 
-    val people = remember(actions, suggested) { recentValues(actions + suggested, PEOPLE) { it.person } }
-    val contexts = remember(actions, suggested) { recentValues(actions + suggested, CONTEXTS) { it.context } }
+    val people = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_PEOPLE) { it.person } }
+    val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
 
     if (listening) {
         ListenSheet(
@@ -768,6 +761,7 @@ private fun SlotRemindersDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     var slots by remember { mutableStateOf(SlotReminders.settings(context)) }
     var editing by remember { mutableStateOf<SlotReminders.Slot?>(null) }
+    var quickAdd by remember { mutableStateOf(TaskNotifications.quickAddEnabled(context)) }
     val update: (SlotReminders.Slot) -> Unit = { changed ->
         SlotReminders.save(context, changed)
         slots = slots.map { if (it.slot == changed.slot) changed else it }
@@ -779,7 +773,7 @@ private fun SlotRemindersDialog(onDismiss: () -> Unit) {
         text = {
             Column {
                 Text(
-                    "A pop-up lists the open actions for each time of day that are due today or overdue.",
+                    "A pop-up lists the open actions for each time of day that are due today or overdue, each with Done and Snooze.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Fresh.TextDim
                 )
@@ -798,6 +792,21 @@ private fun SlotRemindersDialog(onDismiss: () -> Unit) {
                         TextButton(onClick = { editing = s }, enabled = s.enabled) { Text(s.time.format(TIME_FORMAT)) }
                         Switch(checked = s.enabled, onCheckedChange = { update(s.copy(enabled = it)) })
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("🎙️  \"Add a task\" notification", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Reply to it, on the phone or your watch, to add a task",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Fresh.TextDim
+                        )
+                    }
+                    Switch(checked = quickAdd, onCheckedChange = {
+                        quickAdd = it
+                        TaskNotifications.setQuickAdd(context, it)
+                    })
                 }
             }
         },
