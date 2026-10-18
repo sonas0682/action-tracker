@@ -20,6 +20,7 @@ import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
 import com.sonas.actiontracker.widget.DueWidget
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -46,7 +47,8 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     // Repeating actions are kept three months ahead; this adds whatever came into range since the last run.
     init {
         viewModelScope.launch {
-            Series.topUpAll(db)
+            // A failure here only delays the fill until the daily SeriesWorker; it must not crash the start.
+            runCatching { Series.topUpAll(db) }
             runCatching { DueWidget.refresh(getApplication()) }
         }
     }
@@ -89,7 +91,14 @@ class MainVM(app: Application) : AndroidViewModel(app) {
      * stale actions, and queues the automatic Drive backup.
      */
     private fun write(block: suspend () -> Unit) = viewModelScope.launch {
-        block()
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = "Couldn't save that change: ${e.message}"
+            return@launch
+        }
         afterWrite()
     }
 
@@ -181,7 +190,7 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     }
 
     /** Runs the on-device Gemini Nano title pass over new Gmail suggestions. Needs the app in the foreground. */
-    fun smartTitles() = viewModelScope.launch { SmartTitles.run(getApplication()) }
+    fun smartTitles() = viewModelScope.launch { runCatching { SmartTitles.run(getApplication()) } }
 
     fun sync(token: String) {
         if (syncing) return
@@ -194,8 +203,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
                 "Sync failed: ${e.message}"
             }
             syncing = false
-            SmartTitles.run(getApplication())
-            val backfilled = SmartTitles.backfill(getApplication(), token)
+            // Nano passes are best effort: a failure keeps the rule-based titles and retries next time.
+            runCatching { SmartTitles.run(getApplication()) }
+            val backfilled = runCatching { SmartTitles.backfill(getApplication(), token) }.getOrDefault(0)
             if (backfilled > 0) message = "Added email summaries to $backfilled earlier item(s)"
         }
     }

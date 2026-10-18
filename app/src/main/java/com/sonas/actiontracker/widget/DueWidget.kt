@@ -53,6 +53,7 @@ import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.TimeOfDay
+import com.sonas.actiontracker.sync.Backup
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -115,6 +116,8 @@ class MarkDoneAction : ActionCallback {
         val id = parameters[ItemIdKey] ?: return
         Actions.complete(Db.get(context), id)
         DueWidget.refresh(context)
+        // Same follow-up as a tick in the app or on a reminder: queue the Drive backup.
+        runCatching { Backup.backUpSoon(context) }
     }
 }
 

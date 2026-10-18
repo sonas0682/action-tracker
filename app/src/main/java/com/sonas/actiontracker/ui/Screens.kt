@@ -118,16 +118,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
@@ -176,8 +179,9 @@ private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
 
-private fun fullDate(epochDay: Long): String =
-    LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+private val DAY_FORMAT = DateTimeFormatter.ofPattern("EEE, MMM d")
+
+private fun fullDate(epochDay: Long): String = LocalDate.ofEpochDay(epochDay).format(DAY_FORMAT)
 
 private fun dateLabel(epochDay: Long): String {
     val diff = epochDay - today()
@@ -324,7 +328,8 @@ fun AppScreen(
     var pendingSave by remember { mutableStateOf<Pair<Item, Item>?>(null) }
     val deleteNow: (Item, SeriesScope) -> Unit = { item, which ->
         scope.launch {
-            val snapshot = vm.delete(item, which)
+            val snapshot = runCatching { vm.delete(item, which) }
+                .getOrElse { vm.message = "Couldn't delete \"${item.title}\": ${it.message}"; return@launch }
             withUndo(
                 when {
                     item.seriesId == null -> "Deleted \"${item.title}\""
@@ -341,12 +346,13 @@ fun AppScreen(
     }
     val saveNow: (Item, Item, SeriesScope) -> Unit = { original, edited, which ->
         scope.launch {
-            val snapshot = vm.save(original, edited, which)
+            val snapshot = runCatching { vm.save(original, edited, which) }
+                .getOrElse { vm.message = "Couldn't save \"${edited.title}\": ${it.message}"; return@launch }
             if (original.seriesId != null) withUndo("Updated \"${edited.title}\"", snapshot)
         }
     }
     vm.message?.let { lastMessage = it }
-    val open = actions.filter { it.status == STATUS_OPEN && !it.isUpcomingRepeat() }
+    val open = remember(actions, today()) { actions.filter { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } }
 
     AuroraBackground {
         if (insights) {
@@ -480,7 +486,9 @@ fun AppScreen(
             onHeard = { text ->
                 drafting = true
                 scope.launch {
-                    val draft = VoiceDraft.build(appContext, text, people, contexts, usualContexts)
+                    // Nano trouble is already handled inside build; this keeps the sheet from hanging on anything else.
+                    val draft = runCatching { VoiceDraft.build(appContext, text, people, contexts, usualContexts) }
+                        .getOrElse { VoiceDraft.Draft(VoiceDraft.fromRules(text, people, contexts, LocalDate.now(), usualContexts), text.trim(), false) }
                     drafting = false
                     listening = false
                     voiceDraft = draft
@@ -802,13 +810,18 @@ internal fun TabSwitcher(
 private fun NewActionFab(onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val haptics = LocalHapticFeedback.current
     val glow = rememberInfiniteTransition(label = "fab")
-    val halo by glow.animateFloat(
+    val halo = glow.animateFloat(
         initialValue = 0.35f, targetValue = 0.7f,
         animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
         label = "halo"
     )
     Box(modifier, contentAlignment = Alignment.Center) {
-        Box(Modifier.matchParentSize().scale(1f + halo * 0.18f).clip(CircleShape).background(Fresh.Teal.copy(alpha = halo * 0.35f)))
+        // Read in the layer and draw lambdas, so the pulse redraws without recomposing every frame.
+        Box(
+            Modifier.matchParentSize()
+                .graphicsLayer { val s = 1f + halo.value * 0.18f; scaleX = s; scaleY = s }
+                .drawBehind { drawCircle(Fresh.Teal.copy(alpha = halo.value * 0.35f)) }
+        )
         Box(
             Modifier.size(56.dp).clip(CircleShape).background(Fresh.accent).combinedClickable(
                 onClickLabel = "Add action",
@@ -945,7 +958,7 @@ private fun MessageBanner(text: String, onClose: () -> Unit) {
 @Composable
 private fun EmptyState(icon: ImageVector, title: String, body: String, action: (@Composable () -> Unit)? = null) {
     val bob = rememberInfiniteTransition(label = "bob")
-    val dy by bob.animateFloat(
+    val dy = bob.animateFloat(
         initialValue = -6f, targetValue = 6f,
         animationSpec = infiniteRepeatable(tween(2200), RepeatMode.Reverse),
         label = "dy"
@@ -957,7 +970,7 @@ private fun EmptyState(icon: ImageVector, title: String, body: String, action: (
     ) {
         Spacer(Modifier.height(32.dp))
         Box(
-            Modifier.offset(y = dy.dp).size(92.dp).clip(RoundedCornerShape(30.dp)).background(Fresh.accent),
+            Modifier.offset { IntOffset(0, dy.value.dp.roundToPx()) }.size(92.dp).clip(RoundedCornerShape(30.dp)).background(Fresh.accent),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(42.dp))
@@ -1123,23 +1136,9 @@ private fun ActionsList(
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
 ) {
-    // Repeats more than a week out are folded under "Upcoming" so the list stays about now.
-    val (upcoming, open) = actions.filter { it.status == STATUS_OPEN }.partition { it.isUpcomingRepeat() }
-    val done = actions.filter { it.status == STATUS_DONE }
     var showUpcoming by rememberSaveable { mutableStateOf(false) }
-    val grouped: List<Pair<String, List<Item>>> = when (group) {
-        Group.TIME -> open.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap()
-            .map { (time, list) -> time.label to list }
-        Group.DATE -> open.groupBy { dateLabel(it.dueDate) }.toList()
-        Group.PERSON -> open.groupBy { it.person }.toList().sortedBy { it.first }
-        Group.CONTEXT -> open.groupBy { it.context }.toList().sortedBy { it.first }
-    }
-    // Inside a section, actions run Morning → Night (a stable sort, so due order holds within a slot).
-    val sections = grouped.map { (label, list) ->
-        Section("h-$label", label, list.sortedBy { TimeOfDay.of(it.timeOfDay).ordinal })
-    } +
-        (if (upcoming.isNotEmpty()) listOf(Section(UPCOMING_KEY, "Upcoming", if (showUpcoming) upcoming else emptyList())) else emptyList()) +
-        (if (done.isNotEmpty()) listOf(Section("done-header", "Done", done)) else emptyList())
+    // Regrouped only when the list, grouping, Upcoming toggle or day changes, not on every recomposition.
+    val (upcoming, sections) = remember(actions, group, showUpcoming, today()) { buildSections(actions, group, showUpcoming) }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -1150,7 +1149,7 @@ private fun ActionsList(
         item(key = "list-head") {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, MMM d")).uppercase(),
+                    LocalDate.now().format(DAY_FORMAT).uppercase(),
                     style = MaterialTheme.typography.labelSmall,
                     color = Fresh.TextDim,
                     modifier = Modifier.weight(1f)
@@ -1196,6 +1195,27 @@ private fun ActionsList(
 }
 
 private const val UPCOMING_KEY = "upcoming-header"
+
+/** The Upcoming repeats, and the list's sections: the open actions grouped by [group], then Upcoming and Done. */
+private fun buildSections(actions: List<Item>, group: Group, showUpcoming: Boolean): Pair<List<Item>, List<Section>> {
+    // Repeats more than a week out are folded under "Upcoming" so the list stays about now.
+    val (upcoming, open) = actions.filter { it.status == STATUS_OPEN }.partition { it.isUpcomingRepeat() }
+    val done = actions.filter { it.status == STATUS_DONE }
+    val grouped: List<Pair<String, List<Item>>> = when (group) {
+        Group.TIME -> open.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap()
+            .map { (time, list) -> time.label to list }
+        Group.DATE -> open.groupBy { dateLabel(it.dueDate) }.toList()
+        Group.PERSON -> open.groupBy { it.person }.toList().sortedBy { it.first }
+        Group.CONTEXT -> open.groupBy { it.context }.toList().sortedBy { it.first }
+    }
+    // Inside a section, actions run Morning → Night (a stable sort, so due order holds within a slot).
+    val sections = grouped.map { (label, list) ->
+        Section("h-$label", label, list.sortedBy { TimeOfDay.of(it.timeOfDay).ordinal })
+    } +
+        (if (upcoming.isNotEmpty()) listOf(Section(UPCOMING_KEY, "Upcoming", if (showUpcoming) upcoming else emptyList())) else emptyList()) +
+        (if (done.isNotEmpty()) listOf(Section("done-header", "Done", done)) else emptyList())
+    return upcoming to sections
+}
 
 /** How many days ahead repeats show in the main sections; later ones go under "Upcoming". */
 private const val UPCOMING_AFTER_DAYS = 7

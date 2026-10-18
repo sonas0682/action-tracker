@@ -32,9 +32,8 @@ object SyncEngine {
         val today = LocalDate.now()
         var added = 0
 
-        for (mail in Gmail.recent(token)) {
+        for (mail in Gmail.recent(token) { dao.seen("gmail:$it") == 0 }) {
             val key = "gmail:${mail.id}"
-            if (dao.seen(key) > 0) continue
             dao.markProcessed(Processed(key, System.currentTimeMillis()))
             val s = Extractor.fromMail(mail.subject, mail.from, mail.snippet, today) ?: continue
             // Only flagged mail is fetched in full, for the Gemini Nano title pass that runs in the app.

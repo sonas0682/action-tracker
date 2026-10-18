@@ -30,7 +30,7 @@ gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk
 | `App.kt` | Application; saves the last crash trace to `files/last_crash.txt` |
 | `MainActivity.kt` | Fingerprint lock (pref `lock_enabled`, off by default), Google auth hand-off, crash-trace screen (`showLastCrash`) |
 | `data/Data.kt` | Room `Db` (SQLCipher), `Item`/`Processed` entities, `ItemDao`, `DB_VERSION`, all migrations, `DbKey` (Keystore-wrapped passphrase), `TimeOfDay` |
-| `data/Recurrence.kt` | `Recurrence` rules and `Actions` (complete / reopen / deleteOccurrence) |
+| `data/Recurrence.kt` | `Recurrence` rules, `Series` (repeating rows kept 3 months ahead; scoped save / delete / undo) and `Actions` (complete / reopen) |
 | `sync/Google.kt`, `Extractor.kt`, `Sync.kt` | Gmail + Calendar REST, rule-based extraction, `SyncWorker` (~2 h) and notifications |
 | `sync/SmartTitles.kt` | Gemini Nano summarization: email titles and three-bullet summaries |
 | `sync/VoiceDraft.kt` | Spoken sentence to draft `Item` (rules + Nano proofreading) |
@@ -46,12 +46,12 @@ gradle :app:assembleDebug --no-daemon       # debug APK -> app/build/outputs/apk
 
 ## Hard rules
 
-- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 5). Any change to an
+- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 6). Any change to an
   entity needs a version bump, a `Migration` registered in `addMigrations`, and matching
   `Backup` export/import fields. An older build over a newer database crashes at launch, so
   never hand out an APK built from a branch with a lower `DB_VERSION` than `main`. Details in
   `.claude/rules/database-migrations.md`; procedure in the `add-room-migration` skill.
-- **Mark done** goes through `Actions.complete` / `Actions.reopen` / `Actions.deleteOccurrence`
+- **Mark done** goes through `Actions.complete` / `Actions.reopen` (deletes through `Series.delete`)
   in `data/Recurrence.kt`, never `dao.markDone` directly, so repeating actions queue their next
   occurrence the same way from the list, widget and reminder notifications.
 - **Gemini Nano** (ML Kit GenAI) runs only while the app is in the foreground; never call it
