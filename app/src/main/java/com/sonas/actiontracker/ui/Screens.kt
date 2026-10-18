@@ -275,8 +275,6 @@ fun AppScreen(
     onSync: () -> Unit,
     lockEnabled: Boolean,
     onLockChange: (Boolean) -> Unit,
-    reminders: Reminders.Settings,
-    onRemindersChange: (Reminders.Settings) -> Unit,
     onOpenBackup: () -> Unit
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
@@ -299,7 +297,6 @@ fun AppScreen(
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
-    var pickingTime by remember { mutableStateOf(false) }
     var slotReminders by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
@@ -365,8 +362,7 @@ fun AppScreen(
                     onInsights = { insights = true },
                     menu = {
                         MoreMenu(
-                            lockEnabled, onLockChange, reminders, onRemindersChange,
-                            onPickTime = { pickingTime = true },
+                            lockEnabled, onLockChange,
                             onOpenSlotReminders = { slotReminders = true },
                             onOpenBackup = onOpenBackup
                         )
@@ -459,19 +455,7 @@ fun AppScreen(
         )
     }
 
-    if (slotReminders) SlotRemindersDialog(onDismiss = { slotReminders = false })
-
-    if (pickingTime) {
-        ReminderTimeDialog(
-            title = "Remind me about due actions at",
-            initial = reminders.time,
-            onDismiss = { pickingTime = false },
-            onConfirm = {
-                onRemindersChange(reminders.copy(time = it))
-                pickingTime = false
-            }
-        )
-    }
+    if (slotReminders) RemindersDialog(onDismiss = { slotReminders = false })
 }
 
 /**
@@ -671,9 +655,6 @@ private fun SyncButton(syncing: Boolean, onSync: () -> Unit) {
 private fun MoreMenu(
     lockEnabled: Boolean,
     onLockChange: (Boolean) -> Unit,
-    reminders: Reminders.Settings,
-    onRemindersChange: (Reminders.Settings) -> Unit,
-    onPickTime: () -> Unit,
     onOpenSlotReminders: () -> Unit,
     onOpenBackup: () -> Unit
 ) {
@@ -692,17 +673,7 @@ private fun MoreMenu(
                 onClick = { onLockChange(!lockEnabled) }
             )
             DropdownMenuItem(
-                text = { Text("Daily due-date reminder") },
-                trailingIcon = { Switch(checked = reminders.enabled, onCheckedChange = null) },
-                onClick = { onRemindersChange(reminders.copy(enabled = !reminders.enabled)) }
-            )
-            DropdownMenuItem(
-                text = { Text("Reminder time: ${reminders.time.format(TIME_FORMAT)}") },
-                enabled = reminders.enabled,
-                onClick = { open = false; onPickTime() }
-            )
-            DropdownMenuItem(
-                text = { Text("Time-of-day reminders") },
+                text = { Text("Reminders") },
                 onClick = { open = false; onOpenSlotReminders() }
             )
             DropdownMenuItem(
@@ -811,10 +782,11 @@ private fun ReminderTimeDialog(title: String, initial: LocalTime, onDismiss: () 
     )
 }
 
-/** One row per time of day: on/off and the time its pop-up reminder fires. */
+/** The 8 AM digest switch, then one row per time of day: on/off and the time its pop-up fires. */
 @Composable
-private fun SlotRemindersDialog(onDismiss: () -> Unit) {
+private fun RemindersDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
+    var digest by remember { mutableStateOf(Reminders.enabled(context)) }
     var slots by remember { mutableStateOf(SlotReminders.settings(context)) }
     var editing by remember { mutableStateOf<SlotReminders.Slot?>(null) }
     var quickAdd by remember { mutableStateOf(TaskNotifications.quickAddEnabled(context)) }
@@ -825,9 +797,24 @@ private fun SlotRemindersDialog(onDismiss: () -> Unit) {
     val notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Time-of-day reminders") },
+        title = { Text("Reminders") },
         text = {
             Column {
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("☀️  Morning digest · ${Reminders.DIGEST_TIME.format(TIME_FORMAT)}", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Everything due today or overdue, in one summary",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Fresh.TextDim
+                        )
+                    }
+                    Switch(checked = digest, onCheckedChange = {
+                        digest = it
+                        Reminders.setEnabled(context, it)
+                    })
+                }
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "A pop-up lists the open actions for each time of day that are due today or overdue, each with Done and Snooze.",
                     style = MaterialTheme.typography.bodyMedium,
