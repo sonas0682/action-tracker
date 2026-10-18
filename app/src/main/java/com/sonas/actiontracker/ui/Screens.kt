@@ -312,6 +312,7 @@ fun AppScreen(
         }
     }
     var slotReminders by remember { mutableStateOf(false) }
+    var permissions by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -380,6 +381,7 @@ fun AppScreen(
                         MoreMenu(
                             lockEnabled, onLockChange,
                             onOpenSlotReminders = { slotReminders = true },
+                            onOpenPermissions = { permissions = true },
                             onOpenBackup = onOpenBackup
                         )
                     }
@@ -539,6 +541,7 @@ fun AppScreen(
     }
 
     if (slotReminders) RemindersDialog(onDismiss = { slotReminders = false })
+    if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
 /**
@@ -739,6 +742,7 @@ private fun MoreMenu(
     lockEnabled: Boolean,
     onLockChange: (Boolean) -> Unit,
     onOpenSlotReminders: () -> Unit,
+    onOpenPermissions: () -> Unit,
     onOpenBackup: () -> Unit
 ) {
     var open by remember { mutableStateOf(false) }
@@ -762,6 +766,10 @@ private fun MoreMenu(
             DropdownMenuItem(
                 text = { Text("Google Drive backup") },
                 onClick = { open = false; onOpenBackup() }
+            )
+            DropdownMenuItem(
+                text = { Text("Permissions & features") },
+                onClick = { open = false; onOpenPermissions() }
             )
         }
     }

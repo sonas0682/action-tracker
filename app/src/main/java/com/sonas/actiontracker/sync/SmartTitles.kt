@@ -172,6 +172,16 @@ object SmartTitles {
         }
     }
 
+    /** Gemini Nano summarization on this phone, as a [FeatureStatus] value; null if it can't be read. */
+    suspend fun status(context: Context): Int? = withContext(Dispatchers.IO) {
+        val summarizer = client(context, SummarizerOptions.OutputType.ONE_BULLET)
+        try {
+            runCatching { summarizer.checkFeatureStatus().get(STATUS_WAIT_SECONDS, TimeUnit.SECONDS) }.getOrNull()
+        } finally {
+            summarizer.close()
+        }
+    }
+
     private fun client(context: Context, output: Int) = Summarization.getClient(
         SummarizerOptions.builder(context)
             .setInputType(SummarizerOptions.InputType.ARTICLE)

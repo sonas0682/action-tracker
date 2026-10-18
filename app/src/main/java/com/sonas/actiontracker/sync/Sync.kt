@@ -25,14 +25,16 @@ object SyncEngine {
     /**
      * Pulls new Gmail + Calendar items and stores action candidates as SUGGESTED.
      * Every message/event is marked processed the first time it is seen, so it is
-     * never evaluated again (no duplicate actions). Returns the number of new suggestions.
+     * never evaluated again (no duplicate actions). Only the sources in [granted] are read, so
+     * a user who allowed just Gmail or just Calendar still gets that one. Returns the number of new suggestions.
      */
-    suspend fun run(context: Context, token: String): Int = withContext(Dispatchers.IO) {
+    suspend fun run(context: Context, token: String, granted: Collection<String>): Int = withContext(Dispatchers.IO) {
         val dao = Db.get(context).dao()
         val today = LocalDate.now()
         var added = 0
 
-        for (mail in Gmail.recent(token) { dao.seen("gmail:$it") == 0 }) {
+        val mails = if (GoogleAuth.GMAIL_SCOPE in granted) Gmail.recent(token) { dao.seen("gmail:$it") == 0 } else emptyList()
+        for (mail in mails) {
             val key = "gmail:${mail.id}"
             dao.markProcessed(Processed(key, System.currentTimeMillis()))
             val s = Extractor.fromMail(mail.subject, mail.from, mail.snippet, today) ?: continue
@@ -41,7 +43,8 @@ object SyncEngine {
             dao.insert(s.toItem("GMAIL").copy(body = body.take(SmartTitles.MAX_INPUT_CHARS)))
             added++
         }
-        for (event in Calendar.upcoming(token)) {
+        val events = if (GoogleAuth.CALENDAR_SCOPE in granted) Calendar.upcoming(token) else emptyList()
+        for (event in events) {
             val key = "cal:${event.id}"
             if (dao.seen(key) > 0) continue
             dao.markProcessed(Processed(key, System.currentTimeMillis()))
@@ -66,13 +69,14 @@ object SyncEngine {
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         return try {
-            val auth = GoogleAuth.authorize(applicationContext)
+            // Both sources switched off: nothing to sync.
+            val auth = GoogleAuth.authorize(applicationContext) ?: return Result.success()
             val token = auth.accessToken
             if (auth.hasResolution() || token == null) {
                 Notify.signInNeeded(applicationContext)
                 return Result.success()
             }
-            val added = SyncEngine.run(applicationContext, token)
+            val added = SyncEngine.run(applicationContext, token, auth.grantedScopes)
             if (added > 0) Notify.newSuggestions(applicationContext, added)
             Result.success()
         } catch (e: Exception) {

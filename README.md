@@ -1,79 +1,179 @@
 # Action Tracker
 
-A personal action-item tracker for Android (built for a Samsung S25 Ultra).
+Action Tracker is an Android to-do app for the things you must act on. It finds tasks in
+your Gmail and Google Calendar, suggests them to you, and adds them to your list only when you
+say yes. You can also add tasks by typing, speaking, taking a photo or sharing text from
+another app. Your tasks are stored encrypted on your phone.
 
-It scans your Gmail inbox and Google Calendar for things that need doing, **proposes** them in a
-*Suggested* inbox, and only adds them to your list after you confirm. Everything is stored
-encrypted on the phone.
+## What you need
 
-## v1 features
+- An Android phone or tablet running **Android 11 or newer**. Any brand works.
+- A Google account, but only if you want suggestions from Gmail and Calendar or a Drive backup.
+  The app works fully without one.
+- For the smart AI wording: a phone that supports Gemini Nano (for example recent Pixel and
+  Galaxy flagships). On other phones the app uses its built-in rules instead; see
+  [AI and basic mode](#ai-and-basic-mode).
 
-- **Optional fingerprint lock** (off by default; turn it on from the ⋮ menu). BiometricPrompt with device PIN fallback, re-locks after 30 s in the background. Screenshots and the recents preview are always blocked.
-- **Encrypted on-device storage**: Room + SQLCipher (AES-256). The passphrase is wrapped by a hardware-backed Android Keystore key. Backups are disabled.
-- **Sources**: Gmail (inbox, excluding promotions/social, last 2 days), Google Calendar (next 7 days), and custom items (+ button).
-- **Confirm before adding**: Gmail/Calendar items land in *Suggested* as compact rows; tap ✓ to add, ✕ to dismiss, the row to expand and edit, or "Add all".
-- **Default due date is tomorrow** when the source has no date. A date in the text (e.g. "by Friday", "Oct 20", "2026-10-20", "tomorrow") overrides it. Editable any time.
-- **Slim top bar**: Actions (opens first) and Suggested tabs, a compact one-line stats strip (late, today, open, inbox), and a small group-by dropdown, so the list gets almost all of the screen in portrait and landscape.
-- **Swipe to delete**: swipe an action left or right to delete it, with Undo in the snackbar.
-- **Group by** date, person (Me, Nathiya, Vibu, Dharshu, or anyone), or context (Work, Family, Kids/School).
-- **No duplicates**: every Gmail message ID / calendar event ID is recorded the first time it is seen and never evaluated again, even if you dismiss the suggestion.
-- **Background sync** every ~2 hours with a notification when new suggestions arrive.
-- **Morning digest** (8 AM, on/off under ⋮ → Reminders): one notification listing open actions due today or overdue (six lines, then "+N more"). The lock screen shows only the count.
-- **Time of day**: every action has a Morning / Afternoon / Evening / Night slot (work contexts default to Afternoon, everything else to Evening). Group the list by Time to see them.
-- **Time-of-day reminders** (⋮ → Reminders): a heads-up notification per slot (12 PM, 4 PM, 7 PM and 10 PM by default) listing that slot's open actions due today or overdue, as a single notification.
-- **One notification per reminder**: no per-task notifications. Every reminder has Snooze 30 min (it comes back with only the tasks still open); when it lists exactly one task it also has Done. Tap to open the app. Notifications mirror to a paired watch with the same buttons.
-- **Repeating actions**: set Repeat (daily, weekdays, weekly, monthly, yearly) in the edit sheet, or say it ("every Monday"). Ticking one done, from the app, widget or a reminder, queues the next date; deleting one skips to the next.
-- **Voice capture**: long-press + and say the task ("remind me to sign Vibu's permission slip by Friday"); the title (minus "remind me to", filler and date words), due date, time of day, person, context and repeat are picked out of the sentence, and on-device Gemini Nano tidies the title. People are matched against everyone already used, including common mis-hearings ("Vibhu", "Darshu", "Dharsini"); when several are named, the one the task is for wins ("ask Nathiya to call Vibu's teacher" goes to Nathiya). Context falls back to that person's usual context.
-- **Photo to task (on-device AI)**: tap +, then the camera icon in the New action header to take a photo or pick a screenshot, or share any image into Action Tracker. ML Kit reads the text, ML Kit entity extraction finds the dates and times (simple date rules until its small model has downloaded once), and Gemini Nano writes the title and a three-bullet summary when there is enough text. A deadline date ("return by Oct 24") wins over other dates; person and context use the voice-capture rules. Review the Photo draft, then Save. The photo is read on the phone and never stored or uploaded.
-- **Share to task (on-device AI)**: share text from any app (a WhatsApp school message, an email, a web page) to Action Tracker. The same on-device steps find the dates, person and context, and Gemini Nano titles and summarizes longer text. A one-paragraph message gets its most task-like sentence as the title. Review the Shared draft, then Save.
-- **Calendar and stats**: the calendar icon in the top bar opens a month view of due and done actions plus completion stats.
-- **Crash report**: if the app crashes, the next launch shows the stack trace so it can be shared.
+## Install
 
-- **Home-screen widget**: Today (overdue included) and Tomorrow tabs with their counts; tap a tab to see that day's open actions as compact one-line cards, with late-days, person and context tags next to the title. Tap the circle to mark an action done; the widget also updates on its own whenever you add, edit, complete or delete an action in the app. Tap anything else to open the app. Long-press the home screen → Widgets → Action Tracker to add it; it's resizable. Note that action titles are visible on the home screen even when the fingerprint lock is on.
+- **Google Play**: coming soon (see [Publishing on Google Play](#publishing-on-google-play)).
+- **APK**: open the latest green *Build APK* run under the repo's **Actions** tab, download
+  `action-tracker-debug-apk`, and open it on the phone. It installs over the earlier APK and
+  keeps your tasks.
 
-- **Smart titles (Gemini Nano, on-device)**: when you open the app, Gmail suggestions are rewritten into a clean one-line title by Gemini Nano's summarizer. The rules still decide what is an action; nothing leaves the phone. The notes get a short three-bullet summary of the email, plus the original subject; tap a suggestion to read them. Gmail suggestions and open actions from before this update get a summary once, on the next sync with the app open (the email is fetched again from Gmail; titles are left as they are). Needs a Nano-capable phone (the S25 Ultra is supported) and emails of at least ~400 characters; otherwise the rule-based title stays. Google's general Prompt API, which could extract actions directly, doesn't support the S25 Ultra yet.
-- **Encrypted Google Drive backup** (⋮ → Google Drive backup): backs up to the app's hidden Drive folder a couple of minutes after any change and once a day, encrypted on the phone with your backup passphrase (AES-256-GCM, PBKDF2 key). After a reinstall or on a new phone, the app offers to look for a backup on first launch; sign in with the same Google account and enter the passphrase. Backups carry the database schema version and restore across app versions. Google can't read it, and a forgotten passphrase can't be recovered.
+## Permissions
 
-## One-time Google setup (required for Gmail + Calendar)
+The app asks for each permission only when a feature needs it. If you say no, the rest of the
+app keeps working. You can see what is on, off or in basic mode at any time under
+**⋮ → Permissions & features**, and the **Fix** button there takes you to the right setting.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail API**, **Google Calendar API** and **Google Drive API** (Drive is only for the optional backup).
-2. OAuth consent screen: user type **External**, leave publishing status as **Testing**, add scopes
-   `.../auth/gmail.readonly`, `.../auth/calendar.readonly` and `.../auth/drive.appdata`, and add **your own Gmail address as a test user**.
-3. Credentials → Create OAuth client ID → **Android**:
-   - Package name: `com.sonas.actiontracker`
-   - SHA-1: the fingerprint of the key that signs your APK (see below).
+| Permission | What it is used for | If you don't allow it |
+| --- | --- | --- |
+| Notifications | Time-of-day reminders, the 8 AM morning digest, "new suggestions" and "sign in again" alerts | No reminders or alerts. You only see tasks when you open the app. |
+| Alarms & reminders (Android 12+) | Makes reminders pop up at the exact time | Reminders still come, but Android may delay them by a few minutes. |
+| Microphone | Voice capture (long-press +) | No voice capture. Typing, photos and sharing still work. |
+| Run at startup | Sets the reminders again after the phone restarts | Granted automatically; nothing to do. |
+| Internet | Talks to Gmail, Calendar and Drive; downloads the small on-device AI models once | Granted automatically. With no connection, sync and backup wait until you are online. |
 
-> In Testing mode Google expires the grant every **7 days**; the app will notify you to sign in again. `gmail.readonly` is a restricted scope, so publishing the app widely would require Google's verification. That isn't needed for personal use.
+Voice capture also needs a speech recognition service on the phone (Google's is built into
+most phones). If the phone has none, the Permissions & features screen says so.
 
-## Building
+The fingerprint lock (⋮ menu, off by default) needs a fingerprint, face or PIN set up in Android
+settings. If none is set up, the app tells you instead of turning the lock on.
 
-**GitHub Actions (no local setup):** push to `main`, open the *Build APK* workflow run, and download the `action-tracker-debug-apk` artifact. Sideload it onto the phone.
+## Google account access
 
-For a stable signing key (so the Google OAuth SHA-1 never changes), create a keystore once and add four repo secrets:
+Google asks you about each of these separately, and you can untick any of them on Google's
+consent screen. The app then switches that source off and keeps using the others.
+
+| Access | Asked for when | What it is used for | If you don't allow it |
+| --- | --- | --- | --- |
+| Gmail (read only) | You tap Sync the first time | Suggests tasks from emails of the last 2 days (not promotions or social) | No email suggestions. Calendar still works. |
+| Google Calendar (read only) | You tap Sync the first time | Suggests tasks from events in the next 7 days | No calendar suggestions. Gmail still works. |
+| Google Drive (app folder only) | You turn on ⋮ → Google Drive backup | An encrypted backup in a hidden app folder; the app can't see your other Drive files | No backup. Your tasks live only on this phone. |
+
+You can switch Gmail and Calendar on or off at any time under ⋮ → Permissions & features.
+Switching them off stops the app using them. To remove access completely, go to your Google
+Account → Security → Third-party apps.
+
+The app never sends email, changes your calendar, or reads your other Drive files.
+
+## AI and basic mode
+
+All AI runs on the phone. Nothing is sent to an AI service.
+
+| Feature | With on-device AI | In basic mode (AI not available) |
+| --- | --- | --- |
+| Email titles and summaries | Gemini Nano writes a clean one-line title and a three-bullet summary | The title comes from the email subject and built-in rules |
+| Voice capture | Gemini Nano tidies the spoken words | The built-in rules pick out the title, date, person and repeat |
+| Photo and shared text | Gemini Nano titles and summarizes long text | The most task-like sentence becomes the title |
+| Dates in photos and shared text | ML Kit's date model finds dates and times | Simple date rules ("Friday", "Oct 24", "tomorrow") until the small model downloads once |
+
+Basic mode is not an error: every feature still works, the wording is just simpler. Gemini
+Nano only runs while the app is open, and only on phones that support it.
+
+## Features
+
+- **Suggested inbox**: tasks found in Gmail and Calendar wait here. Tap ✓ to add, ✕ to dismiss,
+  or "Add all". The same email or event is never suggested twice.
+- **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
+- **Time of day**: each task is Morning, Afternoon, Evening or Night.
+- **Group** the list by date, time of day, person or context (Work, Family, Kids/School).
+- **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
+  one off queues the next.
+- **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what
+  is due. Each reminder is one notification with Snooze 30 min (and Done when it lists one task).
+  Notifications also show on a paired watch.
+- **Voice capture**: long-press + and say the task, for example "remind me to sign Vibu's
+  permission slip by Friday".
+- **Photo to task**: tap +, then the camera icon, or share a photo or screenshot to the app.
+  The text is read on the phone; the photo is never stored or uploaded.
+- **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
+- **Home-screen widget**: Today and Tomorrow tabs; tick tasks off from the home screen. Task
+  titles are visible there even when the app lock is on.
+- **Calendar and stats**: the calendar icon shows a month view and how many tasks you finished.
+- **Swipe to delete**, with Undo.
+- **Fingerprint lock** (optional) and **screenshot blocking**.
+- **Encrypted Google Drive backup**, restored on a new phone with your backup passphrase.
+- **Crash report**: after a crash, the next launch shows the error so it can be shared.
+
+Works in portrait and landscape on phones, tablets and foldables.
+
+## Privacy
+
+- Tasks are stored in an encrypted database (SQLCipher, AES-256) with a key kept in the
+  phone's secure hardware. Android's own cloud backup is turned off for the app.
+- The only copy that leaves the phone is the optional Drive backup, encrypted on the phone
+  with your passphrase (AES-256-GCM). Google can't read it, and a forgotten passphrase can't be
+  recovered.
+- Gmail and Calendar are read only to suggest tasks. Email text stays on the phone.
+- Voice, photos and AI are processed on the phone.
+- Full policy: [PRIVACY.md](PRIVACY.md).
+
+---
+
+## For developers
+
+### Build
+
+There is no Gradle wrapper; CI uses Gradle 8.11.1 and JDK 17. Requires the Android SDK
+(compile and target SDK 36, min SDK 30).
+
+```bash
+gradle :app:testDebugUnitTest --no-daemon   # unit tests
+gradle :app:assembleDebug --no-daemon       # APK for sideloading
+gradle :app:bundleRelease --no-daemon       # app bundle (.aab) for Google Play
+```
+
+GitHub Actions (*Build APK*) runs all three on every push to `main` and every pull request,
+and uploads `action-tracker-debug-apk` and `action-tracker-release-aab`.
+
+### Signing key
+
+Google sign-in on Android is tied to the package name plus the SHA-1 of the signing key, so
+builds must use one stable key. Create it once and add four repo secrets:
 
 ```bash
 keytool -genkeypair -v -keystore release.jks -alias tracker -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 release.jks   # paste as the KEYSTORE_BASE64 secret
-keytool -list -v -keystore release.jks -alias tracker   # copy the SHA-1 into the OAuth client
+base64 -w0 release.jks                                  # KEYSTORE_BASE64
+keytool -list -v -keystore release.jks -alias tracker   # SHA-1 for the OAuth client
 ```
 
-Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Never commit the keystore (it is git-ignored).
-Without these secrets the workflow signs with a throwaway debug key, and the SHA-1 changes on every build, so Google sign-in will fail.
+Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Never commit the
+keystore (it is git-ignored). Without them CI signs with a throwaway key and sign-in fails.
 
-**Android Studio:** open the folder, let it sync (it generates the Gradle wrapper), and run on the phone. Get the debug SHA-1 with `./gradlew signingReport`.
+### Google Cloud setup
 
-## Stack
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the
+   **Gmail API**, **Google Calendar API** and **Google Drive API**.
+2. OAuth consent screen: user type **External**; add the scopes `.../auth/gmail.readonly`,
+   `.../auth/calendar.readonly` and `.../auth/drive.appdata`.
+3. Credentials → Create OAuth client ID → **Android**, package `com.sonas.actiontracker`, with
+   the SHA-1 of the CI key. For Google Play, add a second Android client with the **Play app
+   signing** SHA-1 (Play Console → Test and release → App integrity).
 
-Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometric · WorkManager + AlarmManager · Glance widget · ML Kit GenAI (Gemini Nano) · ML Kit text recognition + entity extraction · Google Identity Authorization API + Gmail/Calendar/Drive REST.
+While the consent screen is in **Testing**, only the test users you add (up to 100) can sign
+in, and they must sign in again every 7 days.
 
-## Look and feel
+### Publishing on Google Play
 
-Light "Fresh" theme: airy off-white canvas with slowly drifting pastel glows, an
-indigo → sky → teal accent gradient and white glass cards. One slim top bar keeps the list
-front and centre, with an icon-only + button.
+1. Upload `action-tracker-release-aab` from a green run on `main` (version code = run number,
+   so each upload is higher). Use Play App Signing and add its SHA-1 to an OAuth client (above).
+2. Privacy policy URL: link to [PRIVACY.md](PRIVACY.md) on GitHub.
+3. Data safety form: email, calendar and task data are processed on the device and not shared;
+   the Drive backup is encrypted by the user.
+4. **Gmail verification**: `gmail.readonly` is a restricted scope. Before the app can leave
+   Testing for everyone, Google must verify it, including a yearly third-party security
+   assessment. Until then, publish to a closed testing track for your test users. Calendar and
+   Drive app-folder access need only the standard verification.
+5. Reminders use the user-granted "Alarms & reminders" permission, which Play allows for any
+   app; the restricted `USE_EXACT_ALARM` is not used.
 
-## Working on the code
+### Code and rules
 
 `CLAUDE.md` describes the code layout, build commands and the rules every change follows
-(database migrations, privacy, UI style); `.claude/` holds the matching rules, skills and hooks
-used by Claude Code.
+(database migrations, privacy, UI style). `.claude/` holds the matching rules, skills and hooks.
+
+Stack: Kotlin 2, Jetpack Compose (Material 3), Room + SQLCipher, WorkManager + AlarmManager,
+Glance widget, ML Kit GenAI (Gemini Nano), ML Kit text recognition and entity extraction,
+Google Identity Authorization API with the Gmail, Calendar and Drive REST APIs.

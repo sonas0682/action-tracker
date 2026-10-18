@@ -3,14 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Time-of-day reminders: on-time alarms, re-armed after a reboot -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission
-        android:name="android.permission.SCHEDULE_EXACT_ALARM"
-        android:maxSdkVersion="32" />
+    <!-- Time-of-day reminders: on-time alarms, re-armed after a reboot. SCHEDULE_EXACT_ALARM is the
+         user-granted "Alarms & reminders" switch (Google Play only allows USE_EXACT_ALARM for alarm-clock
+         and calendar apps); without it reminders still fire, possibly a few minutes late. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Voice capture: long-press the + button -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Voice capture is optional: keep the app installable on devices without a microphone -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Lets SpeechRecognizer find the phone's speech service (package visibility, Android 11+) -->
     <queries>
