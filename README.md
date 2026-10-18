@@ -79,7 +79,7 @@ Nano only runs while the app is open, and only on phones that support it.
   date in the middle; calendar/stats, sync and ⋮ on the right), then the type bar, then the
   Actions | Suggested tabs. The list is
   anchored to the bottom so the most urgent task is right above your thumb. Calendar and Stats use
-  the same layout: month switcher and close above the Calendar | Stats tabs.
+  the same layout, with the same counts on top: month switcher and close above the Calendar | Stats tabs.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.

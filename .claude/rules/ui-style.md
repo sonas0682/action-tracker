@@ -16,7 +16,7 @@ App
   calendar/stats, sync, ⋮ under the right thumb), then the type-to-capture bar, then the
   Actions | Suggested tabs. Icons never shrink or get covered. On wide/landscape windows the dock
   is one row: tabs, type bar, tools. While the keyboard is up only the type bar shows.
-- Calendar and Stats (`ui/Insights.kt`) mirror it: content on top; bottom dock with the month
+- Calendar and Stats (`ui/Insights.kt`) mirror it: the same stats top bar, then content; bottom dock with the month
   switcher left and close right (where the calendar icon sits on the main screen), then the
   Calendar | Stats tabs.
 - No tall headlines or stat tiles. Both tabs always show a count badge, dimmed at zero, so nothing

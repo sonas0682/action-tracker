@@ -87,6 +87,7 @@ private fun monthOf(index: Int): YearMonth = YearMonth.of(index / 12, index % 12
 @Composable
 fun InsightsScreen(
     actions: List<Item>,
+    topBar: @Composable () -> Unit,
     onClose: () -> Unit,
     onToggle: (Item) -> Unit,
     onEdit: (Item) -> Unit
@@ -100,6 +101,8 @@ fun InsightsScreen(
     // Same thumb-first layout as the main screen: content on top, controls in a bottom dock with
     // the month switcher and close (where the calendar icon sits on the main screen) above the tabs.
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        // The same Late / Today / Open / Inbox pills as the main screen, so the numbers stay in view.
+        topBar()
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 6.dp),

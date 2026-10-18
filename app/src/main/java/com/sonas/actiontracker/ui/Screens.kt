@@ -385,6 +385,7 @@ fun AppScreen(
         if (insights) {
             InsightsScreen(
                 actions,
+                topBar = { TopBar(counts = listOf(open.size, suggested.size), open = open) },
                 onClose = { insights = false },
                 onToggle = { vm.toggleDone(it) },
                 onEdit = { editing = it }
@@ -587,9 +588,9 @@ fun AppScreen(
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
-/** The slim top bar: just the Late / Today / Open / Inbox pills, read at a glance. */
+/** The slim top bar: just the Late / Today / Open / Inbox pills, read at a glance. Calendar and Stats show it too. */
 @Composable
-private fun TopBar(counts: List<Int>, open: List<Item>) {
+internal fun TopBar(counts: List<Int>, open: List<Item>) {
     StatsStrip(
         open, inbox = counts[1],
         Modifier.fillMaxWidth().widthIn(max = 720.dp).padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
