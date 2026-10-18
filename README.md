@@ -24,6 +24,8 @@ encrypted on the phone.
 - **Watch-friendly notifications**: phone notifications mirror to a paired watch (built with a Galaxy Watch 3 in mind), so Done and Snooze work from the wrist. A silent "Add a task" notification has a reply box: dictate a task on the phone or watch and it is added with the voice-capture rules (default due tomorrow). Turn it off under ⋮ → Reminders.
 - **Repeating actions**: set Repeat (daily, weekdays, weekly, monthly, yearly) in the edit sheet, or say it ("every Monday"). Ticking one done, from the app, widget or a reminder, queues the next date; deleting one skips to the next.
 - **Voice capture**: long-press + and say the task ("remind me to sign Vibu's permission slip by Friday"); the title (minus "remind me to", filler and date words), due date, time of day, person, context and repeat are picked out of the sentence, and on-device Gemini Nano tidies the title. People are matched against everyone already used, including common mis-hearings ("Vibhu", "Darshu", "Dharsini"); when several are named, the one the task is for wins ("ask Nathiya to call Vibu's teacher" goes to Nathiya). Context falls back to that person's usual context.
+- **Photo to task (on-device AI)**: tap +, then the camera icon in the New action header to take a photo or pick a screenshot, or share any image into Action Tracker. ML Kit reads the text, ML Kit entity extraction finds the dates and times (simple date rules until its small model has downloaded once), and Gemini Nano writes the title and a three-bullet summary when there is enough text. A deadline date ("return by Oct 24") wins over other dates; person and context use the voice-capture rules. Review the Photo draft, then Save. The photo is read on the phone and never stored or uploaded.
+- **Share to task (on-device AI)**: share text from any app (a WhatsApp school message, an email, a web page) to Action Tracker. The same on-device steps find the dates, person and context, and Gemini Nano titles and summarizes longer text. A one-paragraph message gets its most task-like sentence as the title. Review the Shared draft, then Save.
 - **Calendar and stats**: the calendar icon in the top bar opens a month view of due and done actions plus completion stats.
 - **Crash report**: if the app crashes, the next launch shows the stack trace so it can be shared.
 
@@ -62,7 +64,7 @@ Without these secrets the workflow signs with a throwaway debug key, and the SHA
 
 ## Stack
 
-Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometric · WorkManager + AlarmManager · Glance widget · ML Kit GenAI (Gemini Nano) · Google Identity Authorization API + Gmail/Calendar/Drive REST.
+Kotlin 2 · Jetpack Compose (Material 3) · Room + SQLCipher · AndroidX Biometric · WorkManager + AlarmManager · Glance widget · ML Kit GenAI (Gemini Nano) · ML Kit text recognition + entity extraction · Google Identity Authorization API + Gmail/Calendar/Drive REST.
 
 ## Look and feel
 

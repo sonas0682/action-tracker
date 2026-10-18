@@ -12,5 +12,7 @@
   recents preview blocked. The only off-device copy is the passphrase-encrypted Drive backup.
 - Gemini Nano and speech recognition run on-device; don't send email text, transcripts or tasks
   to any network service.
+- Photo to task reads images with on-device ML Kit (text recognition is bundled; entity extraction
+  downloads only its model, once). Don't store, upload or back up the photos themselves.
 - The repo is public: no real email content, names beyond the family defaults already in the
   code, or personal data in tests, fixtures or commit messages.
