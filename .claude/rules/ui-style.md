@@ -10,16 +10,22 @@ paths:
 App
 - Light "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
   accents. Not a traditional Material look, and not dark.
-- One slim top bar; the list gets almost all of the screen in portrait and landscape. No tall
-  headlines or stat tiles; stats stay as the compact Late/Today/Open/Inbox pills.
-- Top bar layout: Actions | Suggested segmented tabs left, calendar/stats, sync and ⋮ icons right
-  (icons never shrink or get covered; tab labels ellipsize instead). Both tabs always show a count
-  badge, dimmed at zero, so nothing reflows on switch. Stat pills sit on a second row (same row
-  on wide/landscape). Group-by is a small chip at the top of the Actions list, not in the bar.
+- Thumb-first (since 2026-10-18): one slim top bar holds only the date and the calendar/stats,
+  sync and ⋮ icons (icons never shrink or get covered). Everything used often is in the bottom
+  dock: type-to-capture bar, then the Late/Today/Open/Inbox pills, then the Actions | Suggested
+  tabs (nearest the thumb). On wide/landscape windows the pills move to the top bar and the tabs
+  share one row with the type bar. While the keyboard is up only the type bar shows.
+- No tall headlines or stat tiles. Both tabs always show a count badge, dimmed at zero, so nothing
+  reflows on switch. Group-by is a small chip at the top of the Actions list, not in a bar.
+- The Actions list is anchored to the bottom (`reverseLayout`): the first section's first row sits
+  right above the dock, later sections and Done float up. Each section emits rows, then its header.
 - Actions is the first/default tab, Suggested second. Default grouping is Date; Time, Person
   and Context are the alternatives.
-- The add button is an icon-only `+` (long-press opens voice capture). No per-row delete icon:
-  swipe left or right deletes, with Undo in the snackbar.
+- Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the
+  same; Undo in the snackbar.
+- The type bar parses with `VoiceDraft.fromRules` and shows chips live. Empty, it offers the mic
+  and an icon-only `+` (tap: edit sheet, long-press: voice capture); there is no floating button.
+  No per-row delete icon: swipe a row left or right to delete, with Undo in the snackbar.
 - The edit sheet is compact (at most 3/4 of the screen). Person and Context are typeable
   dropdowns of every value already used, so nothing is retyped; no chip rows under them.
   Due/Time and Repeat/Ends sit side by side as dropdown pills.
