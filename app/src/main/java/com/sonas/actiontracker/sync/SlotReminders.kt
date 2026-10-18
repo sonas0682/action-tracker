@@ -110,7 +110,7 @@ object SlotReminders {
 
     /**
      * Posts [slot]'s reminder once per day, reading the open actions now so ones done earlier
-     * are left out. Each task gets its own notification with Done and Snooze ([TaskNotifications]).
+     * are left out. One notification lists them all ([TaskNotifications]).
      */
     suspend fun fire(context: Context, slot: TimeOfDay, today: LocalDate = LocalDate.now()) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -120,7 +120,7 @@ object SlotReminders {
         prefs.edit().putLong(key, today.toEpochDay()).apply()
         val open = Db.get(context).dao().openDueBy(today.toEpochDay()).filter { TimeOfDay.of(it.timeOfDay) == slot }
         ensureChannel(context)
-        TaskNotifications.postGroup(context, TaskNotifications.slotTag(slot.name), CHANNEL, heading(slot, open.size), open, today, urgent = true)
+        TaskNotifications.post(context, TaskNotifications.slotTag(slot.name), CHANNEL, heading(slot, open.size), open, today, urgent = true)
     }
 
     internal fun heading(slot: TimeOfDay, count: Int): String =
@@ -152,7 +152,7 @@ object SlotReminders {
     }
 }
 
-/** Slot alarms; also re-arms alarms and the "Add a task" notification after a reboot or app update. */
+/** Slot alarms; also re-arms alarms after a reboot or app update and clears notifications older builds left. */
 class SlotReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
@@ -169,7 +169,7 @@ class SlotReminderReceiver : BroadcastReceiver() {
                     AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                         SlotReminders.schedule(app)
                         Reminders.schedule(app)
-                        TaskNotifications.showQuickAdd(app)
+                        TaskNotifications.removeLegacy(app)
                     }
                 }
             } finally {
