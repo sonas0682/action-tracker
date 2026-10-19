@@ -66,6 +66,8 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -1400,6 +1402,7 @@ private fun Stamp(text: String, color: Color, alpha: Float, modifier: Modifier =
 
 private data class Section(val key: String, val label: String, val items: List<Item>)
 
+/** Today / Tomorrow / Later pages (Today on launch), switched by a compact tab row right above the dock. */
 @Composable
 private fun ActionsList(
     actions: List<Item>,
@@ -1408,12 +1411,79 @@ private fun ActionsList(
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
 ) {
+    val pager = rememberPagerState { DayPage.entries.size }
+    val scope = rememberCoroutineScope()
+    val t = today()
+    val pages = remember(actions, t) { DayPage.entries.map { actions.onPage(it, t) } }
+    val counts = remember(pages) { pages.map { list -> list.count { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } } }
     var showUpcoming by rememberSaveable { mutableStateOf(false) }
-    // Regrouped only when the list, grouping, Upcoming toggle or day changes, not on every recomposition.
-    val (upcoming, sections) = remember(actions, group, showUpcoming, today()) { buildSections(actions, group, showUpcoming) }
+
+    Column(Modifier.fillMaxSize()) {
+        // Rows already swipe sideways to delete, so pages change from the tabs only.
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), userScrollEnabled = false, key = { it }) { index ->
+            DayPageList(
+                DayPage.entries[index], pages[index], group, showUpcoming,
+                onToggleUpcoming = { showUpcoming = !showUpcoming },
+                vm = vm, onEdit = onEdit, onDelete = onDelete
+            )
+        }
+        DayTabs(
+            pager.currentPage, counts,
+            onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+        )
+    }
+}
+
+/** Segmented Today | Tomorrow | Later control; each segment shows its open count. */
+@Composable
+private fun DayTabs(selected: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.height(38.dp).glass(PILL, strong = true).padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        DayPage.entries.forEachIndexed { i, page ->
+            val isSelected = selected == i
+            val fg by animateColorAsState(if (isSelected) Color.White else Fresh.TextDim, label = "dayTabFg")
+            Row(
+                Modifier.weight(1f).fillMaxHeight().clip(PILL)
+                    .then(if (isSelected) Modifier.background(Fresh.accentHorizontal) else Modifier)
+                    .clickable { onSelect(i) }
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    page.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(5.dp))
+                CountBadge(counts[i], isSelected)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayPageList(
+    page: DayPage,
+    actions: List<Item>,
+    group: Group,
+    showUpcoming: Boolean,
+    onToggleUpcoming: () -> Unit,
+    vm: MainVM,
+    onEdit: (Item) -> Unit,
+    onDelete: (Item) -> Unit
+) {
+    // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
+    val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
     // Anchored to the bottom (reverseLayout): the first section's first row sits right above the
-    // dock, later sections float up, and a short list rests on the dock instead of the top bar.
+    // tabs, later sections float up, and a short list rests on the dock instead of the top bar.
     // So each section emits its rows first and its header last, which puts the header above them.
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -1423,13 +1493,14 @@ private fun ActionsList(
     ) {
         if (sections.isEmpty()) {
             item(key = "empty") {
+                val (title, body) = when (page) {
+                    DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Tomorrow."
+                    DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
+                    DayPage.LATER -> "Nothing planned later" to "Actions due after tomorrow show up here."
+                }
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Nothing yet", style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        "Type a task below, or review Suggested.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Fresh.TextDim
-                    )
+                    Text(title, style = MaterialTheme.typography.headlineMedium)
+                    Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
                 }
             }
         }
@@ -1447,7 +1518,7 @@ private fun ActionsList(
                 if (section.key == UPCOMING_KEY) {
                     GroupHeader(
                         section.label, upcoming.size, group,
-                        Modifier.animateItem().clickable { showUpcoming = !showUpcoming },
+                        Modifier.animateItem().clickable(onClick = onToggleUpcoming),
                         trailing = if (showUpcoming) "Hide" else "Show"
                     )
                 } else {

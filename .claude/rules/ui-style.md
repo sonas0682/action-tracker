@@ -27,6 +27,9 @@ App
   reflows on switch.
 - The Actions list is anchored to the bottom (`reverseLayout`): the first section's first row sits
   right above the dock, later sections and Done float up. Each section emits rows, then its header.
+- Actions is split into Today | Tomorrow | Later pages (Today on launch; overdue and anything
+  finished today show on Today). A compact tab row with open counts sits at the bottom of the list
+  zone, right above the dock. Pages change by tap only, since rows swipe sideways to delete.
 - Actions is the first/default tab, Suggested second. Default grouping is Date; Time, Person
   and Context are the alternatives.
 - Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the
