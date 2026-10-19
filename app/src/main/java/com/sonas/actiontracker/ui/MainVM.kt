@@ -69,6 +69,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     /** Dismisses a suggestion. The source stays in `processed`, so it never comes back. */
     fun dismiss(item: Item) = write { dao.delete(item) }
 
+    /** Undo for a swiped suggestion: puts the row back exactly as it was (same id, still suggested). */
+    fun restore(item: Item) = write { dao.upsert(listOf(item)) }
+
     /**
      * Saves the edit sheet. A new repeating action is filled three months ahead; for an
      * occurrence of a series, [scope] picks which occurrences change. Returns what Undo needs.

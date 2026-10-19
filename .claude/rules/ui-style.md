@@ -10,20 +10,35 @@ paths:
 App
 - Light "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
   accents. Not a traditional Material look, and not dark.
-- One slim top bar; the list gets almost all of the screen in portrait and landscape. No tall
-  headlines or stat tiles; stats stay as the compact Late/Today/Open/Inbox pills.
-- Top bar layout: Actions | Suggested segmented tabs left, calendar/stats, sync and ⋮ icons right
-  (icons never shrink or get covered; tab labels ellipsize instead). Both tabs always show a count
-  badge, dimmed at zero, so nothing reflows on switch. Stat pills sit on a second row (same row
-  on wide/landscape). Group-by is a small chip at the top of the Actions list, not in the bar.
+- Thumb-first (since 2026-10-18): the slim top bar holds only the Late/Today/Open/Inbox pills
+  (44dp tall, big numbers). Everything tappable is in the bottom dock: a tools row (left:
+  contextual chip, group-by on Actions or "Add all" on Suggested; middle: today's date; right:
+  calendar/stats, sync, ⋮ under the right thumb), then the type-to-capture bar, then the
+  Actions | Suggested tabs. Icons never shrink or get covered. On wide/landscape windows the dock
+  is one row: tabs, type bar, tools. While the keyboard is up only the type bar shows.
+- Calendar and Stats (`ui/Insights.kt`) mirror it: the same stats top bar, then content; bottom dock with the month
+  switcher left and close right (where the calendar icon sits on the main screen), then the
+  Calendar | Stats tabs.
+- Three zones, visibly separate: the stats bar and the bottom dock are solid white `panel()`s
+  (rounded inner corners, soft indigo shadow, running under the system bars); the list between
+  them sits low on a sunken `Fresh.Recess` tint over the aurora, with solid white rows. Controls on a panel use `well()` (canvas tint + rim), and the
+  stat pills are tinted in their own colour, so pills, controls and list rows never look alike.
+- No tall headlines or stat tiles. Both tabs always show a count badge, dimmed at zero, so nothing
+  reflows on switch.
+- The Actions list is anchored to the bottom (`reverseLayout`): the first section's first row sits
+  right above the dock, later sections and Done float up. Each section emits rows, then its header.
 - Actions is the first/default tab, Suggested second. Default grouping is Date; Time, Person
   and Context are the alternatives.
-- The add button is an icon-only `+` (long-press opens voice capture). No per-row delete icon:
-  swipe left or right deletes, with Undo in the snackbar.
+- Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the
+  same; Undo in the snackbar.
+- The type bar parses with `VoiceDraft.fromRules` and shows chips live. Empty, it offers the mic
+  and an icon-only `+` (tap: edit sheet, long-press: voice capture); there is no floating button.
+  No per-row delete icon: swipe a row left or right to delete, with Undo in the snackbar.
 - The edit sheet is compact (at most 3/4 of the screen). Person and Context are typeable
   dropdowns of every value already used, so nothing is retyped; no chip rows under them.
   Due/Time and Repeat/Ends sit side by side as dropdown pills.
-- Rows stay white; don't put tinted layers behind translucent rows.
+- Rows stay white (solid `glass(strong = true)` in the list, so the recess tint never shows
+  through); don't put tinted layers behind translucent rows.
 
 Widget (`widget/DueWidget.kt`)
 - Today/Tomorrow tabs, single-line card rows grouped under time-of-day headers, person tag on

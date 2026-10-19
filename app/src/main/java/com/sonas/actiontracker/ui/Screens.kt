@@ -3,6 +3,22 @@
 package com.sonas.actiontracker.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import kotlinx.coroutines.delay
+import kotlin.math.abs
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -324,6 +340,17 @@ fun AppScreen(
             if (result == SnackbarResult.ActionPerformed) vm.undo(snapshot)
         }
     }
+    /** A snackbar with Undo when [onUndo] is given, plain otherwise. */
+    val showUndo: (String, (() -> Unit)?) -> Unit = { text, onUndo ->
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val result = snackbar.showSnackbar(text, actionLabel = onUndo?.let { "Undo" }, duration = SnackbarDuration.Short)
+            if (result == SnackbarResult.ActionPerformed) onUndo?.invoke()
+        }
+    }
+    val people = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_PEOPLE) { it.person } }
+    val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
+    val usualContexts = remember(actions) { VoiceDraft.usualContexts(actions) }
     // A repeating action asks which occurrences first (this one / following / all).
     var pendingDelete by remember { mutableStateOf<Item?>(null) }
     var pendingSave by remember { mutableStateOf<Pair<Item, Item>?>(null) }
@@ -359,25 +386,76 @@ fun AppScreen(
         if (insights) {
             InsightsScreen(
                 actions,
+                topBar = { TopBar(counts = listOf(open.size, suggested.size), open = open) },
                 onClose = { insights = false },
                 onToggle = { vm.toggleDone(it) },
                 onEdit = { editing = it }
             )
         } else {
-            // Top + side insets keep the bar clear of the status bar and the camera cutout in landscape.
+            // Thumb-first: a calm slim bar on top for rare actions; tabs, stats and the type bar sit in
+            // a bottom dock, and the Actions list is anchored to the bottom so the most urgent row is
+            // nearest the thumb. Side insets keep it clear of the camera cutout in landscape.
             Column(
                 Modifier.fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    // The list sits low on a sunken tint; the stats and dock panels float above it.
+                    .background(Fresh.Recess)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             ) {
-                TopBar(
+                TopBar(counts = listOf(open.size, suggested.size), open = open)
+                AnimatedVisibility(
+                    visible = vm.message != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    MessageBanner(lastMessage, onClose = { vm.message = null })
+                }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    PullToRefreshBox(
+                        isRefreshing = vm.syncing,
+                        onRefresh = onSync,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        if (tab == TAB_ACTIONS) {
+                            ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
+                        } else {
+                            SuggestedDeck(
+                                suggested, vm,
+                                onEdit = { editing = it },
+                                onSync = onSync,
+                                onAdded = { item ->
+                                    // A repeating suggestion fills its series on confirm, so only a one-off can be put back.
+                                    if (item.recurrence == Recurrence.NONE.name) showUndo("Added \"${item.title}\"") { vm.restore(item) }
+                                    else showUndo("Added \"${item.title}\"", null)
+                                },
+                                onSkipped = { item -> showUndo("Skipped \"${item.title}\"") { vm.restore(item) } }
+                            )
+                        }
+                    }
+                    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+                BottomDock(
                     tab = tab,
                     onTab = { tab = it },
                     counts = listOf(open.size, suggested.size),
-                    open = open,
-                    syncing = vm.syncing,
-                    onSync = onSync,
-                    onInsights = { insights = true },
-                    menu = {
+                    people = people,
+                    contexts = contexts,
+                    usualContexts = usualContexts,
+                    onNew = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
+                    onVoice = startListening,
+                    onAdd = { draft ->
+                        tab = TAB_ACTIONS
+                        saveNow(Item.blank(), draft, SeriesScope.THIS)
+                        showUndo("Added \"${draft.title}\"", null)
+                    },
+                    contextual = {
+                        if (tab == TAB_ACTIONS) GroupMenu(group) { group = it }
+                        else if (suggested.isNotEmpty()) DockChip("Add all ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
+                    },
+                    tools = {
+                        GlassIconButton(onClick = { insights = true }) {
+                            Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
+                        }
+                        SyncButton(vm.syncing, onSync)
                         MoreMenu(
                             lockEnabled, onLockChange,
                             onOpenSlotReminders = { slotReminders = true },
@@ -386,40 +464,9 @@ fun AppScreen(
                         )
                     }
                 )
-                AnimatedVisibility(
-                    visible = vm.message != null,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    MessageBanner(lastMessage, onClose = { vm.message = null })
-                }
-                PullToRefreshBox(
-                    isRefreshing = vm.syncing,
-                    onRefresh = onSync,
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                ) {
-                    if (tab == TAB_ACTIONS) {
-                        ActionsList(actions, group, onGroup = { group = it }, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
-                    } else {
-                        SuggestedList(suggested, vm, onEdit = { editing = it }, onSync = onSync)
-                    }
-                }
             }
-            NewActionFab(
-                onClick = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
-                onLongClick = startListening,
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
-            )
         }
-        SnackbarHost(
-            snackbar,
-            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 16.dp, end = 92.dp, bottom = 16.dp)
-        )
     }
-
-    val people = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_PEOPLE) { it.person } }
-    val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
-    val usualContexts = remember(actions) { VoiceDraft.usualContexts(actions) }
 
     // Photo to task: a camera shot, a picked image or one shared into the app becomes a draft.
     val captureFile = remember { File(File(appContext.cacheDir, "photos"), "capture.jpg") }
@@ -544,46 +591,245 @@ fun AppScreen(
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
-/**
- * The home bar. Row 1: Actions | Suggested tabs on the left, calendar/stats, sync and menu on the
- * right. The icons are measured first, so the tabs can only shrink (labels ellipsize) and never
- * push or cover them. Row 2: the four stat pills; on wide windows (landscape) they sit in row 1.
- */
+/** The slim top bar: just the Late / Today / Open / Inbox pills, read at a glance. Calendar and Stats show it too. */
 @Composable
-private fun TopBar(
+internal fun TopBar(counts: List<Int>, open: List<Item>) {
+    // Its own white panel, running up under the status bar, with rounded lower corners.
+    Box(
+        // zIndex keeps its shadow above the list, which is drawn after it.
+        Modifier.fillMaxWidth().zIndex(1f).panel(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
+        contentAlignment = Alignment.Center
+    ) {
+        StatsStrip(
+            open, inbox = counts[1],
+            Modifier.fillMaxWidth().widthIn(max = 720.dp).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp)
+        )
+    }
+}
+
+/**
+ * Everything the thumb touches, at the bottom: a tools row (group-by on Actions or "Add all" on
+ * Suggested on the left, today's date in the middle, calendar/stats, sync and menu on the right under
+ * the right thumb), then the type-to-capture bar (with its live chips), then the Actions | Suggested
+ * tabs. While the keyboard is up only the bar shows. On wide windows it is one row: tabs, bar, then the tools.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BottomDock(
     tab: Int,
     onTab: (Int) -> Unit,
     counts: List<Int>,
-    open: List<Item>,
-    syncing: Boolean,
-    onSync: () -> Unit,
-    onInsights: () -> Unit,
-    menu: @Composable () -> Unit
+    people: List<String>,
+    contexts: List<String>,
+    usualContexts: Map<String, String>,
+    onNew: () -> Unit,
+    onVoice: () -> Unit,
+    onAdd: (Item) -> Unit,
+    contextual: @Composable () -> Unit,
+    tools: @Composable () -> Unit
 ) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val typing = WindowInsets.isImeVisible
+    BoxWithConstraints(
+        Modifier.fillMaxWidth()
+            .zIndex(1f)
+            .panel(DOCK_SHAPE)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp)
+    ) {
         val wide = maxWidth >= 600.dp
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HomeTabs(tab, counts, onTab, Modifier.weight(1f, fill = false))
-                if (wide) {
-                    Spacer(Modifier.width(16.dp))
-                    StatsStrip(open, inbox = counts[1], Modifier.weight(1f))
-                }
-                Spacer(Modifier.width(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GlassIconButton(onClick = onInsights) {
-                        Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
+        if (wide) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                HomeTabs(tab, counts, onTab, Modifier.width(280.dp))
+                Spacer(Modifier.width(12.dp))
+                CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.weight(1f))
+                if (!typing) {
+                    Spacer(Modifier.width(12.dp))
+                    Row(Modifier.height(50.dp), verticalAlignment = Alignment.CenterVertically) {
+                        contextual()
+                        Spacer(Modifier.width(8.dp))
+                        tools()
                     }
-                    SyncButton(syncing, onSync)
-                    menu()
                 }
             }
-            if (!wide) StatsStrip(open, inbox = counts[1], Modifier.fillMaxWidth().padding(top = 8.dp))
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!typing) ToolsRow(contextual, tools, middle = { TodayLabel() })
+                CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.fillMaxWidth())
+                if (!typing) HomeTabs(tab, counts, onTab, Modifier.fillMaxWidth())
+            }
         }
+    }
+}
+
+/** The bottom dock's white panel: rounded top corners, running down under the navigation bar. */
+internal val DOCK_SHAPE = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+/**
+ * A screen's contextual chip on the left, its icon buttons on the right and an optional [middle]
+ * (today's date on the main screen) centred in the space between them.
+ */
+@Composable
+internal fun ToolsRow(
+    contextual: @Composable () -> Unit,
+    tools: @Composable () -> Unit,
+    middle: (@Composable () -> Unit)? = null
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        contextual()
+        Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) { middle?.invoke() }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { tools() }
+    }
+}
+
+/** Today's date ("Sun, Oct 18") for the gap in the tools row; ellipsizes rather than crowd the icons. */
+@Composable
+private fun TodayLabel() {
+    Text(
+        LocalDate.now().format(DAY_FORMAT),
+        style = MaterialTheme.typography.titleSmall,
+        color = Fresh.TextDim,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
+}
+
+/** Small glass chip used for the dock's contextual action ("Add all"). */
+@Composable
+private fun DockChip(label: String, icon: ImageVector, tint: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.height(36.dp).well(PILL).clickable(onClick = onClick).padding(start = 10.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
+    }
+}
+
+/**
+ * Type-to-capture: "ask Vibu about the science fair Friday evening" becomes a task with the same
+ * rules as voice capture ([VoiceDraft.fromRules]); chips show what was understood while typing.
+ * Empty, the bar offers the mic and the `+` (tap: full edit sheet, long-press: voice).
+ */
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun CaptureBar(
+    people: List<String>,
+    contexts: List<String>,
+    usualContexts: Map<String, String>,
+    onNew: () -> Unit,
+    onVoice: () -> Unit,
+    onAdd: (Item) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptics = LocalHapticFeedback.current
+    var text by rememberSaveable { mutableStateOf("") }
+    val draft = remember(text, people, contexts, usualContexts) {
+        if (text.isBlank()) null
+        else VoiceDraft.fromRules(text, people, contexts, LocalDate.now(), usualContexts)
+            .copy(source = "CUSTOM", notes = "")
+            .takeIf { it.title.isNotBlank() }
+    }
+    val submit = {
+        draft?.let { onAdd(it); text = "" }
+        Unit
+    }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        AnimatedVisibility(visible = draft != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            // Keep the last chips while the row collapses.
+            var shown by remember { mutableStateOf<Item?>(null) }
+            if (draft != null) shown = draft
+            shown?.let { DraftChips(it) }
+        }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 50.dp).well(RoundedCornerShape(18.dp))
+                .padding(start = 16.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicTextField(
+                value = text,
+                onValueChange = { text = it },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Fresh.Text),
+                cursorBrush = SolidColor(Fresh.Indigo),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
+                maxLines = 3,
+                modifier = Modifier.weight(1f).semantics { contentDescription = "New task" },
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (text.isEmpty()) {
+                            Text(
+                                "Type a task…",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Fresh.TextDim.copy(alpha = 0.7f),
+                                maxLines = 1
+                            )
+                        }
+                        inner()
+                    }
+                }
+            )
+            if (text.isEmpty()) {
+                IconButton(onClick = onVoice, modifier = Modifier.size(40.dp)) {
+                    Icon(MicIcon, "Add action by voice", tint = Fresh.Indigo, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(Fresh.accent).combinedClickable(
+                        onClickLabel = "Add action",
+                        onLongClickLabel = "Add action by voice",
+                        onLongClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onVoice()
+                        },
+                        onClick = onNew
+                    ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = "Add action", tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+            } else {
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (draft != null) Fresh.accent else Brush.linearGradient(listOf(Fresh.Rim, Fresh.Rim)))
+                        .clickable(enabled = draft != null, onClickLabel = "Add task", onClick = submit),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.Check, contentDescription = "Add task", tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+            }
+        }
+    }
+}
+
+/** What the type bar understood: who, when, time of day, context and repeat. */
+@Composable
+private fun DraftChips(item: Item) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        InfoChip(item.person, personColor(item.person))
+        InfoChip(shortDue(item.dueDate), dueColor(item.dueDate).takeIf { it != Fresh.TextDim } ?: Fresh.Teal)
+        val time = TimeOfDay.of(item.timeOfDay)
+        InfoChip(time.label, timeColor(time))
+        InfoChip(item.context, Fresh.Indigo)
+        val repeat = Recurrence.of(item.recurrence)
+        if (repeat != Recurrence.NONE) InfoChip(repeat.label, Fresh.Teal)
+    }
+}
+
+@Composable
+private fun InfoChip(label: String, dot: Color) {
+    Row(
+        Modifier.height(28.dp).well(PILL).padding(start = 9.dp, end = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = Fresh.Text, maxLines = 1)
     }
 }
 
@@ -594,17 +840,18 @@ private fun TopBar(
 @Composable
 private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.height(40.dp).glass(PILL).padding(3.dp),
+        modifier.height(46.dp).well(PILL).padding(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TAB_LABELS.forEachIndexed { i, label ->
             val selected = tab == i
             val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "tabFg")
             Row(
-                Modifier.weight(1f, fill = false).fillMaxHeight().clip(PILL)
+                Modifier.weight(1f).fillMaxHeight().clip(PILL)
                     .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier)
                     .clickable { onSelect(i) }
                     .padding(start = 14.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -660,15 +907,18 @@ private fun StatsStrip(open: List<Item>, inbox: Int, modifier: Modifier = Modifi
 private fun MiniStat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
     val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
     Row(
-        modifier.height(28.dp).glass(PILL).padding(horizontal = 8.dp),
+        // Tinted in the stat's own colour, so the pills read as numbers, not as buttons or rows.
+        modifier.height(44.dp).clip(RoundedCornerShape(14.dp))
+            .background((if (color == Fresh.Text) Fresh.Indigo else color).copy(alpha = 0.10f))
+            .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("${shown.toInt()}", style = MaterialTheme.typography.titleSmall, color = color, maxLines = 1)
-        Spacer(Modifier.width(5.dp))
+        Text("${shown.toInt()}", style = MaterialTheme.typography.titleLarge, color = color, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
         Text(
             label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = Fresh.TextDim,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -682,7 +932,7 @@ private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.height(32.dp).glass(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
+            Modifier.height(36.dp).well(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("By ${group.label.lowercase()}", style = MaterialTheme.typography.labelLarge, color = Fresh.Text, maxLines = 1)
@@ -714,7 +964,7 @@ private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
 @Composable
 internal fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
     Box(
-        Modifier.size(36.dp).glass(CircleShape).clickable(enabled = enabled, onClick = onClick),
+        Modifier.size(36.dp).well(CircleShape).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { content() }
 }
@@ -784,7 +1034,7 @@ internal fun TabSwitcher(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    BoxWithConstraints(modifier.height(40.dp).glass(PILL).padding(3.dp)) {
+    BoxWithConstraints(modifier.height(40.dp).well(PILL).padding(3.dp)) {
         val segment = maxWidth / labels.size
         val x by animateDpAsState(segment * tab, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow), label = "tab")
         Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Fresh.accentHorizontal))
@@ -809,40 +1059,6 @@ internal fun TabSwitcher(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun NewActionFab(onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
-    val haptics = LocalHapticFeedback.current
-    val glow = rememberInfiniteTransition(label = "fab")
-    val halo = glow.animateFloat(
-        initialValue = 0.35f, targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
-        label = "halo"
-    )
-    Box(modifier, contentAlignment = Alignment.Center) {
-        // Read in the layer and draw lambdas, so the pulse redraws without recomposing every frame.
-        Box(
-            Modifier.matchParentSize()
-                .graphicsLayer { val s = 1f + halo.value * 0.18f; scaleX = s; scaleY = s }
-                .drawBehind { drawCircle(Fresh.Teal.copy(alpha = halo.value * 0.35f)) }
-        )
-        Box(
-            Modifier.size(56.dp).clip(CircleShape).background(Fresh.accent).combinedClickable(
-                onClickLabel = "Add action",
-                onLongClickLabel = "Add action by voice",
-                onLongClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onLongClick()
-                },
-                onClick = onClick
-            ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Rounded.Add, contentDescription = "Add action", tint = Color.White, modifier = Modifier.size(28.dp))
         }
     }
 }
@@ -996,8 +1212,21 @@ private fun EmptyState(icon: ImageVector, title: String, body: String, action: (
 
 // ---------------------------------------------------------------- Suggested inbox
 
+private enum class Swipe { ADD, SKIP, EDIT }
+
+/**
+ * Suggested as a deck of cards: swipe the top card right to add it, left to skip it, up to edit it
+ * first. The buttons under the deck do the same, for one-handed taps and for TalkBack.
+ */
 @Composable
-private fun SuggestedList(items: List<Item>, vm: MainVM, onEdit: (Item) -> Unit, onSync: () -> Unit) {
+private fun SuggestedDeck(
+    items: List<Item>,
+    vm: MainVM,
+    onEdit: (Item) -> Unit,
+    onSync: () -> Unit,
+    onAdded: (Item) -> Unit,
+    onSkipped: (Item) -> Unit
+) {
     if (items.isEmpty()) {
         EmptyState(
             icon = Icons.Rounded.Email,
@@ -1008,127 +1237,163 @@ private fun SuggestedList(items: List<Item>, vm: MainVM, onEdit: (Item) -> Unit,
         }
         return
     }
-    var expanded by remember { mutableStateOf<Long?>(null) }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        item(key = "intro") {
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${items.size} TO REVIEW",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Fresh.TextDim,
-                    modifier = Modifier.weight(1f)
+    val top = items.first()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val threshold = with(density) { 110.dp.toPx() }
+    // One offset per top card; a new top card starts centred.
+    val offset = remember(top.id) { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val fling: (Swipe) -> Unit = { action ->
+        scope.launch {
+            val away = with(density) { 600.dp.toPx() }
+            offset.animateTo(
+                when (action) {
+                    Swipe.ADD -> Offset(away, offset.value.y)
+                    Swipe.SKIP -> Offset(-away, offset.value.y)
+                    Swipe.EDIT -> Offset(0f, -away)
+                },
+                tween(220)
+            )
+            when (action) {
+                Swipe.ADD -> { vm.confirm(top); onAdded(top) }
+                Swipe.SKIP -> { vm.dismiss(top); onSkipped(top) }
+                Swipe.EDIT -> onEdit(top)
+            }
+            // Edit leaves the card in the deck, and a failed write keeps it: bring it back after a beat.
+            delay(if (action == Swipe.EDIT) 300 else 1500)
+            offset.snapTo(Offset.Zero)
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().widthIn(max = 480.dp), contentAlignment = Alignment.BottomCenter) {
+            val cardHeight = minOf(maxHeight - 24.dp, 440.dp)
+            // Up to two cards peek out behind the top one.
+            items.take(3).asReversed().forEachIndexed { i, item ->
+                val depth = minOf(items.size, 3) - 1 - i
+                val isTop = depth == 0
+                SuggestionCard(
+                    item,
+                    offset = if (isTop) offset.value else Offset.Zero,
+                    threshold = threshold,
+                    modifier = Modifier.fillMaxWidth().height(cardHeight)
+                        .graphicsLayer {
+                            if (isTop) {
+                                translationX = offset.value.x
+                                translationY = offset.value.y
+                                rotationZ = offset.value.x / 40f
+                            } else {
+                                translationY = -depth * 12.dp.toPx()
+                                val s = 1f - depth * 0.05f
+                                scaleX = s; scaleY = s
+                            }
+                        }
+                        .then(
+                            if (isTop) Modifier.pointerInput(item.id) {
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        val (x, y) = offset.value
+                                        when {
+                                            x > threshold -> fling(Swipe.ADD)
+                                            x < -threshold -> fling(Swipe.SKIP)
+                                            y < -threshold && abs(x) < threshold / 2 -> fling(Swipe.EDIT)
+                                            else -> scope.launch { offset.animateTo(Offset.Zero, spring(dampingRatio = 0.6f)) }
+                                        }
+                                    },
+                                    onDragCancel = { scope.launch { offset.animateTo(Offset.Zero, spring(dampingRatio = 0.6f)) } }
+                                ) { change, drag ->
+                                    change.consume()
+                                    scope.launch { offset.snapTo(offset.value + drag) }
+                                }
+                            } else Modifier
+                        )
                 )
-                TextButton(onClick = { vm.confirmAll(items) }) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Fresh.Green)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add all", color = Fresh.Green, style = MaterialTheme.typography.labelLarge)
-                }
             }
         }
-        items(items, key = { it.id }) { item ->
-            SuggestionRow(
-                item,
-                expanded = expanded == item.id,
-                onToggle = { expanded = if (expanded == item.id) null else item.id },
-                onAdd = { vm.confirm(item) },
-                onEdit = { onEdit(item) },
-                onDismiss = { vm.dismiss(item) },
-                modifier = Modifier.animateItem()
-            )
+        Row(
+            Modifier.padding(top = 14.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DeckButton(Icons.Rounded.Close, "Skip", Fresh.Coral, 54.dp) { fling(Swipe.SKIP) }
+            DeckButton(Icons.Rounded.Edit, "Edit first", Fresh.Indigo, 44.dp) { fling(Swipe.EDIT) }
+            DeckButton(Icons.Rounded.Check, "Add", Fresh.Green, 54.dp) { fling(Swipe.ADD) }
         }
     }
 }
 
-/** One compact suggestion: icon, one-line title, one-line meta, inline dismiss/add. Tap to expand. */
 @Composable
-private fun SuggestionRow(
-    item: Item,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onAdd: () -> Unit,
-    onEdit: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val tint = sourceColor(item.source)
-    Column(
-        modifier.fillMaxWidth()
-            .glass(ROW_SHAPE, strong = expanded)
-            .clickable(onClick = onToggle)
-            .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp)
+private fun DeckButton(icon: ImageVector, label: String, tint: Color, size: Dp, onClick: () -> Unit) {
+    Box(
+        Modifier.size(size).glass(CircleShape, strong = true).clickable(onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(sourceIcon(item.source), null, tint = tint, modifier = Modifier.size(16.dp))
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    item.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = if (expanded) 4 else 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        shortDue(item.dueDate),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = dueColor(item.dueDate)
-                    )
-                    Text(
-                        "  ·  ${item.person}  ·  ${item.context}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Fresh.TextDim,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Rounded.Close, "Dismiss", tint = Fresh.TextDim, modifier = Modifier.size(18.dp))
-            }
-            Spacer(Modifier.width(2.dp))
-            Box(
-                Modifier.size(34.dp).clip(CircleShape).background(Fresh.accent).clickable(onClick = onAdd),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.Check, "Add", tint = Color.White, modifier = Modifier.size(18.dp))
-            }
-        }
-        AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(Modifier.padding(start = 40.dp, top = 6.dp, end = 6.dp)) {
-                if (item.notes.isNotBlank()) {
-                    Text(
-                        item.notes, maxLines = 10, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall, color = Fresh.TextDim
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        when (item.source) {
-                            "GMAIL" -> "From Gmail"
-                            "CALENDAR" -> "From Calendar"
-                            else -> "Added by you"
-                        } + " · due ${fullDate(item.dueDate)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = tint,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = onEdit) {
-                        Icon(Icons.Rounded.Edit, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Edit")
-                    }
-                }
-            }
-        }
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(24.dp))
     }
+}
+
+/** One suggestion as a card: source, title, summary, and chips for who / when / time / context. */
+@Composable
+private fun SuggestionCard(item: Item, offset: Offset, threshold: Float, modifier: Modifier = Modifier) {
+    val tint = sourceColor(item.source)
+    Box(modifier.glass(RoundedCornerShape(26.dp), strong = true)) {
+        Column(Modifier.fillMaxSize().padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(sourceIcon(item.source), null, tint = tint, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    when (item.source) {
+                        "GMAIL" -> "From Gmail"
+                        "CALENDAR" -> "From Calendar"
+                        else -> "Added by you"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = tint
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(item.title, style = MaterialTheme.typography.headlineSmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            if (item.notes.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    item.notes,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Fresh.TextDim,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(12.dp))
+            DraftChips(item)
+        }
+        // Stamps fade in as the card is dragged toward each action.
+        Stamp("ADD", Fresh.Green, alpha = (offset.x / threshold).coerceIn(0f, 1f), Modifier.align(Alignment.TopEnd).padding(18.dp).rotate(12f))
+        Stamp("SKIP", Fresh.Coral, alpha = (-offset.x / threshold).coerceIn(0f, 1f), Modifier.align(Alignment.TopStart).padding(18.dp).rotate(-12f))
+        Stamp(
+            "EDIT", Fresh.Indigo,
+            alpha = if (abs(offset.x) < threshold / 2) (-offset.y / threshold).coerceIn(0f, 1f) else 0f,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp)
+        )
+    }
+}
+
+@Composable
+private fun Stamp(text: String, color: Color, alpha: Float, modifier: Modifier = Modifier) {
+    if (alpha <= 0f) return
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 2.sp),
+        color = color,
+        modifier = modifier.graphicsLayer { this.alpha = alpha }
+            .border(3.dp, color, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    )
 }
 
 // ---------------------------------------------------------------- Actions
@@ -1139,7 +1404,6 @@ private data class Section(val key: String, val label: String, val items: List<I
 private fun ActionsList(
     actions: List<Item>,
     group: Group,
-    onGroup: (Group) -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
@@ -1148,29 +1412,21 @@ private fun ActionsList(
     // Regrouped only when the list, grouping, Upcoming toggle or day changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming, today()) { buildSections(actions, group, showUpcoming) }
 
+    // Anchored to the bottom (reverseLayout): the first section's first row sits right above the
+    // dock, later sections float up, and a short list rests on the dock instead of the top bar.
+    // So each section emits its rows first and its header last, which puts the header above them.
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 104.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        reverseLayout = true
     ) {
-        // Today's date and the group-by chip; mirrors Suggested's "N TO REVIEW · Add all" row and scrolls away.
-        item(key = "list-head") {
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    LocalDate.now().format(DAY_FORMAT).uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Fresh.TextDim,
-                    modifier = Modifier.weight(1f)
-                )
-                GroupMenu(group, onGroup)
-            }
-        }
         if (sections.isEmpty()) {
             item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Nothing yet", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "Tap + to add one, or review Suggested.",
+                        "Type a task below, or review Suggested.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Fresh.TextDim
                     )
@@ -1178,6 +1434,15 @@ private fun ActionsList(
             }
         }
         sections.forEach { section ->
+            items(section.items, key = { it.id }) { item ->
+                ActionRow(
+                    item, if (section.key == UPCOMING_KEY) Group.TIME else group,
+                    onToggle = { vm.toggleDone(item) },
+                    onEdit = { onEdit(item) },
+                    onDelete = { onDelete(item) },
+                    modifier = Modifier.animateItem()
+                )
+            }
             item(key = section.key) {
                 if (section.key == UPCOMING_KEY) {
                     GroupHeader(
@@ -1188,15 +1453,6 @@ private fun ActionsList(
                 } else {
                     GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
                 }
-            }
-            items(section.items, key = { it.id }) { item ->
-                ActionRow(
-                    item, if (section.key == UPCOMING_KEY) Group.TIME else group,
-                    onToggle = { vm.toggleDone(item) },
-                    onEdit = { onEdit(item) },
-                    onDelete = { onDelete(item) },
-                    modifier = Modifier.animateItem()
-                )
             }
         }
     }
@@ -1296,7 +1552,7 @@ private fun ActionRow(
     ) {
         Row(
             Modifier.fillMaxWidth()
-                .glass(ROW_SHAPE)
+                .glass(ROW_SHAPE, strong = true)
                 .clickable(onClick = onEdit)
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically

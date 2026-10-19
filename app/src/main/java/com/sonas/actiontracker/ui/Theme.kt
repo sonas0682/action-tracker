@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -48,6 +49,8 @@ object Fresh {
     val Glass = Color(0xCCFFFFFF)
     val GlassStrong = Color(0xFFFFFFFF)
     val Rim = Color(0x1A1B1D33)
+    /** Sunken tint laid over the aurora behind the list, so the white panels and rows lift off it. */
+    val Recess = Color(0xB3E4E7F3)
 
     val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
     val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))
@@ -126,6 +129,20 @@ fun AppTheme(content: @Composable () -> Unit) {
 fun Modifier.glass(shape: Shape, strong: Boolean = false): Modifier =
     this.clip(shape)
         .background(if (strong) Fresh.GlassStrong else Fresh.Glass)
+        .border(1.dp, Fresh.Rim, shape)
+
+/**
+ * Solid white panel for the stats bar and the bottom dock: lifted off the list with a soft indigo
+ * shadow, so the three zones (stats, list, controls) read as separate layers.
+ */
+fun Modifier.panel(shape: Shape): Modifier =
+    this.shadow(24.dp, shape, ambientColor = Fresh.Indigo.copy(alpha = 0.32f), spotColor = Fresh.Indigo.copy(alpha = 0.38f))
+        .background(Fresh.GlassStrong, shape)
+
+/** A control on a panel: a soft canvas-tinted well with a rim, so it stands out from the white panel. */
+fun Modifier.well(shape: Shape): Modifier =
+    this.clip(shape)
+        .background(Fresh.Canvas)
         .border(1.dp, Fresh.Rim, shape)
 
 /** Full-screen canvas with slowly drifting violet, magenta and cyan glows behind the content. */
