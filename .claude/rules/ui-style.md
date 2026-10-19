@@ -21,7 +21,7 @@ App
   Calendar | Stats tabs.
 - Three zones, visibly separate: the stats bar and the bottom dock are solid white `panel()`s
   (rounded inner corners, soft indigo shadow, running under the system bars); the list between
-  them stays on the aurora canvas. Controls on a panel use `well()` (canvas tint + rim), and the
+  them sits low on a sunken `Fresh.Recess` tint over the aurora, with solid white rows. Controls on a panel use `well()` (canvas tint + rim), and the
   stat pills are tinted in their own colour, so pills, controls and list rows never look alike.
 - No tall headlines or stat tiles. Both tabs always show a count badge, dimmed at zero, so nothing
   reflows on switch.
@@ -37,7 +37,8 @@ App
 - The edit sheet is compact (at most 3/4 of the screen). Person and Context are typeable
   dropdowns of every value already used, so nothing is retyped; no chip rows under them.
   Due/Time and Repeat/Ends sit side by side as dropdown pills.
-- Rows stay white; don't put tinted layers behind translucent rows.
+- Rows stay white (solid `glass(strong = true)` in the list, so the recess tint never shows
+  through); don't put tinted layers behind translucent rows.
 
 Widget (`widget/DueWidget.kt`)
 - Today/Tomorrow tabs, single-line card rows grouped under time-of-day headers, person tag on

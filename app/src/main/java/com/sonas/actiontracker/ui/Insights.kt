@@ -102,7 +102,7 @@ fun InsightsScreen(
 
     // Same thumb-first layout as the main screen: content on top, controls in a bottom dock with
     // the month switcher and close (where the calendar icon sits on the main screen) above the tabs.
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+    Column(Modifier.fillMaxSize().background(Fresh.Recess).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         // The same Late / Today / Open / Inbox pills as the main screen, so the numbers stay in view.
         topBar()
         Column(

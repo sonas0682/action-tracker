@@ -397,6 +397,8 @@ fun AppScreen(
             // nearest the thumb. Side insets keep it clear of the camera cutout in landscape.
             Column(
                 Modifier.fillMaxSize()
+                    // The list sits low on a sunken tint; the stats and dock panels float above it.
+                    .background(Fresh.Recess)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             ) {
                 TopBar(counts = listOf(open.size, suggested.size), open = open)
@@ -630,6 +632,7 @@ private fun BottomDock(
     val typing = WindowInsets.isImeVisible
     BoxWithConstraints(
         Modifier.fillMaxWidth()
+            .zIndex(1f)
             .panel(DOCK_SHAPE)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp)
@@ -1549,7 +1552,7 @@ private fun ActionRow(
     ) {
         Row(
             Modifier.fillMaxWidth()
-                .glass(ROW_SHAPE)
+                .glass(ROW_SHAPE, strong = true)
                 .clickable(onClick = onEdit)
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically

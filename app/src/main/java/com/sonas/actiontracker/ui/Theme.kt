@@ -49,6 +49,8 @@ object Fresh {
     val Glass = Color(0xCCFFFFFF)
     val GlassStrong = Color(0xFFFFFFFF)
     val Rim = Color(0x1A1B1D33)
+    /** Sunken tint laid over the aurora behind the list, so the white panels and rows lift off it. */
+    val Recess = Color(0xB3E4E7F3)
 
     val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
     val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))
@@ -134,7 +136,7 @@ fun Modifier.glass(shape: Shape, strong: Boolean = false): Modifier =
  * shadow, so the three zones (stats, list, controls) read as separate layers.
  */
 fun Modifier.panel(shape: Shape): Modifier =
-    this.shadow(12.dp, shape, ambientColor = Fresh.Indigo.copy(alpha = 0.18f), spotColor = Fresh.Indigo.copy(alpha = 0.22f))
+    this.shadow(24.dp, shape, ambientColor = Fresh.Indigo.copy(alpha = 0.32f), spotColor = Fresh.Indigo.copy(alpha = 0.38f))
         .background(Fresh.GlassStrong, shape)
 
 /** A control on a panel: a soft canvas-tinted well with a rim, so it stands out from the white panel. */
