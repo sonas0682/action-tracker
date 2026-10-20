@@ -1,6 +1,5 @@
 package com.sonas.actiontracker.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -12,38 +11,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +58,7 @@ import java.time.format.DateTimeFormatter
 private val PILL_SHAPE = RoundedCornerShape(50)
 private val CARD = RoundedCornerShape(18.dp)
 private val CELL = RoundedCornerShape(10.dp)
-private val MONTH_FORMAT = DateTimeFormatter.ofPattern("MMMM yyyy")
+internal val MONTH_FORMAT = DateTimeFormatter.ofPattern("MMMM yyyy")
 private val DAY_FORMAT = DateTimeFormatter.ofPattern("EEE, MMM d")
 private val WEEKDAYS = listOf("S", "M", "T", "W", "T", "F", "S")
 private const val CHART_DAYS = 14
@@ -82,73 +70,32 @@ private fun Item.doneDay(): Long? = when {
     else -> dueDate
 }
 
-private fun YearMonth.toIndex() = year * 12 + monthValue - 1
-private fun monthOf(index: Int): YearMonth = YearMonth.of(index / 12, index % 12 + 1)
+internal fun YearMonth.toIndex() = year * 12 + monthValue - 1
+internal fun monthOf(index: Int): YearMonth = YearMonth.of(index / 12, index % 12 + 1)
 
-/** Full-screen Calendar / Stats view over the action list, opened from the top bar. */
+/**
+ * The Calendar or Stats page of the main pager. The month (switched from the page header) and the
+ * picked day live in the main screen so both pages and the header share them.
+ */
 @Composable
-fun InsightsScreen(
+fun InsightsPage(
+    stats: Boolean,
     actions: List<Item>,
-    topBar: @Composable () -> Unit,
-    onClose: () -> Unit,
+    month: YearMonth,
+    selected: Long,
+    onSelect: (Long) -> Unit,
     onToggle: (Item) -> Unit,
     onEdit: (Item) -> Unit
 ) {
-    BackHandler(onBack = onClose)
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    var monthIndex by rememberSaveable { mutableIntStateOf(YearMonth.now().toIndex()) }
-    var selected by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
-    val month = monthOf(monthIndex)
-
-    // Same thumb-first layout as the main screen: content on top, controls in a bottom dock with
-    // the month switcher and close (where the calendar icon sits on the main screen) above the tabs.
-    Column(Modifier.fillMaxSize().background(Fresh.Recess).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-        // The same Late / Today / Open / Inbox pills as the main screen, so the numbers stay in view.
-        topBar()
-        Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
-                if (tab == 0) {
-                    CalendarTab(actions, month, selected, onSelect = { selected = it }, onToggle, onEdit)
-                } else {
-                    StatsTab(actions, month)
-                }
-                Spacer(Modifier.height(12.dp))
-            }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+            if (stats) StatsTab(actions, month) else CalendarTab(actions, month, selected, onSelect, onToggle, onEdit)
+            Spacer(Modifier.height(12.dp))
         }
-        Column(
-            Modifier.fillMaxWidth().panel(DOCK_SHAPE)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ToolsRow(
-                contextual = { MonthHeader(month, onPrev = { monthIndex-- }, onNext = { monthIndex++ }) },
-                tools = {
-                    GlassIconButton(onClick = onClose) {
-                        Icon(Icons.Rounded.Close, "Back to the list", tint = Fresh.Text, modifier = Modifier.size(20.dp))
-                    }
-                }
-            )
-            TabSwitcher(tab, listOf("Calendar", "Stats"), listOf(0, 0), { tab = it }, Modifier.fillMaxWidth().height(46.dp))
-        }
-    }
-}
-
-@Composable
-private fun MonthHeader(month: YearMonth, onPrev: () -> Unit, onNext: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        GlassIconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", tint = Fresh.Text) }
-        Text(
-            month.format(MONTH_FORMAT),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.widthIn(min = 132.dp).padding(horizontal = 8.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-        GlassIconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next month", tint = Fresh.Text) }
     }
 }
 
