@@ -77,7 +77,7 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Thumb-first layout**: the top bar only shows the Late / Today / Open / Inbox counts. Everything
   you tap is at the bottom: a tools row (group-by, or "Add all" on Suggested, on the left; today's
   date in the middle; calendar/stats, sync and ⋮ on the right), then the type bar, then the
-  Actions | Suggested tabs. The list is
+  Today | Tomorrow | Later | Suggested tabs. The list is
   anchored to the bottom so the most urgent task is right above your thumb. Calendar and Stats use
   the same layout, with the same counts on top: month switcher and close above the Calendar | Stats tabs.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
@@ -88,7 +88,7 @@ Nano only runs while the app is open, and only on phones that support it.
   in the bottom tools row takes them all. The same email or event is never suggested twice.
 - **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
 - **Time of day**: each task is Morning, Afternoon, Evening or Night.
-- **Today / Tomorrow / Later pages**: Actions opens on Today (overdue plus due today, and anything finished today); Tomorrow and Later (everything after tomorrow, including Upcoming repeats) are one tap away in the tab row, each with its open count.
+- **Today / Tomorrow / Later pages**: the app opens on Today (overdue plus due today, and anything finished today). Swipe sideways, or tap the bottom tabs, to move to Tomorrow, Later (everything after tomorrow, including Upcoming repeats) and Suggested; each tab shows its count.
 - **Group** each page by date, time of day, person or context (Work, Family, Kids/School).
 - **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
   one off queues the next.
@@ -103,7 +103,7 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Home-screen widget**: Today and Tomorrow tabs; tick tasks off from the home screen. Task
   titles are visible there even when the app lock is on.
 - **Calendar and stats**: the calendar icon shows a month view and how many tasks you finished.
-- **Swipe to delete**, with Undo.
+- **Long-press to delete** (sideways swipes change pages), with Undo.
 - **Fingerprint lock** (optional) and **screenshot blocking**.
 - **Encrypted Google Drive backup**, restored on a new phone with your backup passphrase.
 - **Crash report**: after a crash, the next launch shows the error so it can be shared.

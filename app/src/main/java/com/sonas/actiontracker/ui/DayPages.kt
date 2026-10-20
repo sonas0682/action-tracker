@@ -5,7 +5,7 @@ import com.sonas.actiontracker.data.STATUS_DONE
 import java.time.Instant
 import java.time.ZoneId
 
-/** The Actions tab's three pages. Overdue work sits on Today so nothing late is hidden. */
+/** The three day pages before Suggested in the dock. Overdue work sits on Today so nothing late is hidden. */
 enum class DayPage(val label: String) { TODAY("Today"), TOMORROW("Tomorrow"), LATER("Later") }
 
 /** Which page an action due on [dueDay] belongs to, given [today] (both epoch days). */

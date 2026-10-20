@@ -113,9 +113,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -126,7 +123,6 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -191,8 +187,9 @@ enum class Group(val label: String) { TIME("Time"), DATE("Date"), PERSON("Person
 private const val DAY_MS = 86_400_000L
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
 private val PILL = RoundedCornerShape(50)
-private const val TAB_ACTIONS = 0
-private val TAB_LABELS = listOf("Actions", "Suggested")
+/** The dock's tabs: the three day pages, then Suggested. Swipe or tap to move between them. */
+private val TAB_LABELS = DayPage.entries.map { it.label } + "Suggested"
+private val TAB_SUGGESTED = DayPage.entries.size
 private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
@@ -309,7 +306,9 @@ fun AppScreen(
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
+    // Opens on Today; Tomorrow, Later and Suggested are a swipe or a tap away.
+    val pager = rememberPagerState { TAB_LABELS.size }
+    var showUpcoming by rememberSaveable { mutableStateOf(false) }
     var group by rememberSaveable { mutableStateOf(Group.DATE) }
     var insights by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Item?>(null) }
@@ -383,6 +382,12 @@ fun AppScreen(
     }
     vm.message?.let { lastMessage = it }
     val open = remember(actions, today()) { actions.filter { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } }
+    val dayPages = remember(actions, today()) { DayPage.entries.map { actions.onPage(it, today()) } }
+    val tabCounts = remember(dayPages, suggested) {
+        dayPages.map { list -> list.count { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } } + suggested.size
+    }
+    val tab = pager.currentPage
+    val goTo: (Int) -> Unit = { scope.launch { pager.animateScrollToPage(it) } }
 
     AuroraBackground {
         if (insights) {
@@ -417,40 +422,47 @@ fun AppScreen(
                         onRefresh = onSync,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        if (tab == TAB_ACTIONS) {
-                            ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
-                        } else {
-                            SuggestedDeck(
-                                suggested, vm,
-                                onEdit = { editing = it },
-                                onSync = onSync,
-                                onAdded = { item ->
-                                    // A repeating suggestion fills its series on confirm, so only a one-off can be put back.
-                                    if (item.recurrence == Recurrence.NONE.name) showUndo("Added \"${item.title}\"") { vm.restore(item) }
-                                    else showUndo("Added \"${item.title}\"", null)
-                                },
-                                onSkipped = { item -> showUndo("Skipped \"${item.title}\"") { vm.restore(item) } }
-                            )
+                        HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { index ->
+                            if (index < TAB_SUGGESTED) {
+                                DayPageList(
+                                    DayPage.entries[index], dayPages[index], group, showUpcoming,
+                                    onToggleUpcoming = { showUpcoming = !showUpcoming },
+                                    vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo
+                                )
+                            } else {
+                                SuggestedDeck(
+                                    suggested, vm,
+                                    onEdit = { editing = it },
+                                    onSync = onSync,
+                                    onAdded = { item ->
+                                        // A repeating suggestion fills its series on confirm, so only a one-off can be put back.
+                                        if (item.recurrence == Recurrence.NONE.name) showUndo("Added \"${item.title}\"") { vm.restore(item) }
+                                        else showUndo("Added \"${item.title}\"", null)
+                                    },
+                                    onSkipped = { item -> showUndo("Skipped \"${item.title}\"") { vm.restore(item) } }
+                                )
+                            }
                         }
                     }
                     SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
                 }
                 BottomDock(
                     tab = tab,
-                    onTab = { tab = it },
-                    counts = listOf(open.size, suggested.size),
+                    onTab = goTo,
+                    counts = tabCounts,
                     people = people,
                     contexts = contexts,
                     usualContexts = usualContexts,
                     onNew = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
                     onVoice = startListening,
                     onAdd = { draft ->
-                        tab = TAB_ACTIONS
+                        // Show the page the new action lands on.
+                        goTo(dayPageOf(draft.dueDate, today()).ordinal)
                         saveNow(Item.blank(), draft, SeriesScope.THIS)
                         showUndo("Added \"${draft.title}\"", null)
                     },
                     contextual = {
-                        if (tab == TAB_ACTIONS) GroupMenu(group) { group = it }
+                        if (tab < TAB_SUGGESTED) GroupMenu(group) { group = it }
                         else if (suggested.isNotEmpty()) DockChip("Add all ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
                     },
                     tools = {
@@ -611,9 +623,9 @@ internal fun TopBar(counts: List<Int>, open: List<Item>) {
 }
 
 /**
- * Everything the thumb touches, at the bottom: a tools row (group-by on Actions or "Add all" on
+ * Everything the thumb touches, at the bottom: a tools row (group-by on the day pages or "Add all" on
  * Suggested on the left, today's date in the middle, calendar/stats, sync and menu on the right under
- * the right thumb), then the type-to-capture bar (with its live chips), then the Actions | Suggested
+ * the right thumb), then the type-to-capture bar (with its live chips), then the Today | Tomorrow | Later | Suggested
  * tabs. While the keyboard is up only the bar shows. On wide windows it is one row: tabs, bar, then the tools.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -642,7 +654,7 @@ private fun BottomDock(
         val wide = maxWidth >= 600.dp
         if (wide) {
             Row(verticalAlignment = Alignment.Bottom) {
-                HomeTabs(tab, counts, onTab, Modifier.width(280.dp))
+                HomeTabs(tab, counts, onTab, Modifier.width(420.dp))
                 Spacer(Modifier.width(12.dp))
                 CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.weight(1f))
                 if (!typing) {
@@ -836,8 +848,8 @@ private fun InfoChip(label: String, dot: Color) {
 }
 
 /**
- * Two-segment control. Each segment always shows its count badge (dimmed at zero), so nothing
- * appears or disappears when switching tabs and the bar never reflows.
+ * Today | Tomorrow | Later | Suggested. Each tab stacks its label over its count (dimmed at zero) so
+ * four fit a phone and nothing reflows when switching.
  */
 @Composable
 private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -848,46 +860,34 @@ private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modif
         TAB_LABELS.forEachIndexed { i, label ->
             val selected = tab == i
             val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "tabFg")
-            Row(
+            val countColor = when {
+                selected -> Color.White.copy(alpha = 0.85f)
+                counts[i] > 0 -> Fresh.Indigo
+                else -> Fresh.TextDim.copy(alpha = 0.6f)
+            }
+            Column(
                 Modifier.weight(1f).fillMaxHeight().clip(PILL)
                     .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier)
                     .clickable { onSelect(i) }
-                    .padding(start = 14.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
                     label,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     color = fg,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.width(6.dp))
-                CountBadge(counts[i], selected)
+                Text(
+                    if (counts[i] > 99) "99+" else "${counts[i]}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = countColor,
+                    maxLines = 1
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun CountBadge(count: Int, selected: Boolean) {
-    val bg = when {
-        selected -> Color(0x33FFFFFF)
-        count > 0 -> Fresh.Indigo.copy(alpha = 0.12f)
-        else -> Fresh.Glass
-    }
-    val fg = when {
-        selected -> Color.White
-        count > 0 -> Fresh.Indigo
-        else -> Fresh.TextDim
-    }
-    Box(
-        Modifier.widthIn(min = 22.dp).clip(PILL).background(bg).padding(horizontal = 6.dp, vertical = 1.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(if (count > 99) "99+" else "$count", style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1)
     }
 }
 
@@ -1402,72 +1402,6 @@ private fun Stamp(text: String, color: Color, alpha: Float, modifier: Modifier =
 
 private data class Section(val key: String, val label: String, val items: List<Item>)
 
-/** Today / Tomorrow / Later pages (Today on launch), switched by a compact tab row right above the dock. */
-@Composable
-private fun ActionsList(
-    actions: List<Item>,
-    group: Group,
-    vm: MainVM,
-    onEdit: (Item) -> Unit,
-    onDelete: (Item) -> Unit
-) {
-    val pager = rememberPagerState { DayPage.entries.size }
-    val scope = rememberCoroutineScope()
-    val t = today()
-    val pages = remember(actions, t) { DayPage.entries.map { actions.onPage(it, t) } }
-    val counts = remember(pages) { pages.map { list -> list.count { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } } }
-    var showUpcoming by rememberSaveable { mutableStateOf(false) }
-
-    Column(Modifier.fillMaxSize()) {
-        // Rows already swipe sideways to delete, so pages change from the tabs only.
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), userScrollEnabled = false, key = { it }) { index ->
-            DayPageList(
-                DayPage.entries[index], pages[index], group, showUpcoming,
-                onToggleUpcoming = { showUpcoming = !showUpcoming },
-                vm = vm, onEdit = onEdit, onDelete = onDelete
-            )
-        }
-        DayTabs(
-            pager.currentPage, counts,
-            onSelect = { scope.launch { pager.animateScrollToPage(it) } },
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
-        )
-    }
-}
-
-/** Segmented Today | Tomorrow | Later control; each segment shows its open count. */
-@Composable
-private fun DayTabs(selected: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier.height(38.dp).glass(PILL, strong = true).padding(3.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        DayPage.entries.forEachIndexed { i, page ->
-            val isSelected = selected == i
-            val fg by animateColorAsState(if (isSelected) Color.White else Fresh.TextDim, label = "dayTabFg")
-            Row(
-                Modifier.weight(1f).fillMaxHeight().clip(PILL)
-                    .then(if (isSelected) Modifier.background(Fresh.accentHorizontal) else Modifier)
-                    .clickable { onSelect(i) }
-                    .padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    page.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = fg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(Modifier.width(5.dp))
-                CountBadge(counts[i], isSelected)
-            }
-        }
-    }
-}
-
 @Composable
 private fun DayPageList(
     page: DayPage,
@@ -1483,7 +1417,7 @@ private fun DayPageList(
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
     // Anchored to the bottom (reverseLayout): the first section's first row sits right above the
-    // tabs, later sections float up, and a short list rests on the dock instead of the top bar.
+    // dock, later sections float up, and a short list rests on the dock instead of the top bar.
     // So each section emits its rows first and its header last, which puts the header above them.
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -1585,6 +1519,7 @@ private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modif
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActionRow(
     item: Item,
@@ -1595,36 +1530,13 @@ private fun ActionRow(
     modifier: Modifier = Modifier
 ) {
     val isDone = item.status == STATUS_DONE
-    // Swipe either way past the threshold to delete; the list's animateItem() closes the gap.
-    // A repeating row springs back while the "which occurrences?" dialog asks.
-    val swipe = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) onDelete()
-            value != SwipeToDismissBoxValue.Settled && item.seriesId == null
-        }
-    )
-    SwipeToDismissBox(
-        state = swipe,
-        modifier = modifier,
-        backgroundContent = {
-            // Only paint while a swipe is in progress: the glass row is translucent, so a
-            // resting red layer would tint every row and show the trash icon through it.
-            val direction = swipe.dismissDirection
-            if (direction != SwipeToDismissBoxValue.Settled) {
-                Box(
-                    Modifier.fillMaxSize().clip(ROW_SHAPE).background(Fresh.Coral.copy(alpha = 0.9f))
-                        .padding(horizontal = 20.dp),
-                    contentAlignment = if (direction == SwipeToDismissBoxValue.EndToStart) Alignment.CenterEnd else Alignment.CenterStart
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                }
-            }
-        }
-    ) {
+    // Sideways swipes change pages, so delete is a long-press: Delete in a small menu, with Undo after.
+    var menu by remember { mutableStateOf(false) }
+    Box(modifier) {
         Row(
             Modifier.fillMaxWidth()
                 .glass(ROW_SHAPE, strong = true)
-                .clickable(onClick = onEdit)
+                .combinedClickable(onClick = onEdit, onLongClickLabel = "Delete options", onLongClick = { menu = true })
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1669,6 +1581,13 @@ private fun ActionRow(
                 Spacer(Modifier.width(6.dp))
             }
             TimeIcon(TimeOfDay.of(item.timeOfDay))
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fresh.Coral) },
+                onClick = { menu = false; onDelete() }
+            )
         }
     }
 }
