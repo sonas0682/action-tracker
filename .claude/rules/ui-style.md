@@ -29,8 +29,11 @@ App
   right above the dock, later sections and Done float up. Each section emits rows, then its header.
 - The dock's one tab row is Today | Tomorrow | Later | Suggested (label over count) plus icon-only
   Calendar and Stats tabs, so six fit a phone. Today opens on launch; overdue and anything finished today show on Today. The pages sit
-  in a `HorizontalPager`: swipe sideways anywhere (or tap a tab) to move between them; Back goes to Today. Default
-  grouping is Date; Time, Person and Context are the alternatives, and apply to the day pages.
+  in a `HorizontalPager`: swipe sideways anywhere (or tap a tab) to move between them; Back goes to Today.
+  Each day page has its own grouping from the chip: Today and Tomorrow default to Time, Later to
+  Date (Sona's choice 2026-10-20); Person and Context are the alternatives.
+- Calendar's day list is one list (no time-of-day sub-headers), each row with its time-of-day icon
+  on the right.
 - Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the
   same; Undo in the snackbar.
 - The type bar parses with `VoiceDraft.fromRules` and shows chips live. Empty, it offers the mic

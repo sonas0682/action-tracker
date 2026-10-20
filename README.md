@@ -88,7 +88,8 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
 - **Time of day**: each task is Morning, Afternoon, Evening or Night.
 - **Today / Tomorrow / Later pages**: the app opens on Today (overdue plus due today, and anything finished today). Swipe sideways, or tap the bottom tabs, to move to Tomorrow, Later (everything after tomorrow, including Upcoming repeats), Suggested, Calendar and Stats; each task tab shows its count. Back returns to Today.
-- **Group** each page by date, time of day, person or context (Work, Family, Kids/School).
+- **Group** each page by date, time of day, person or context (Work, Family, Kids/School). Today and
+  Tomorrow start grouped by time of day, Later by date; each page remembers its own choice.
 - **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
   one off queues the next.
 - **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what

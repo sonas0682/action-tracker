@@ -182,15 +182,10 @@ private fun CalendarTab(
             modifier = Modifier.padding(start = 4.dp)
         )
     }
-    // The day's actions under Morning / Afternoon / Evening / Night, empty slots skipped.
-    dayItems.groupBy { TimeOfDay.of(it.timeOfDay) }.toSortedMap().forEach { (time, list) ->
-        Row(Modifier.padding(start = 4.dp, top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TimeIcon(time, 16.dp)
-            Spacer(Modifier.width(6.dp))
-            Text(time.label.uppercase(), style = MaterialTheme.typography.labelSmall, color = timeColor(time))
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            list.forEach { DayRow(it, today, onToggle = { onToggle(it) }, onEdit = { onEdit(it) }) }
+    // One list for the day, open first and Morning → Night; each row shows its time-of-day icon.
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        dayItems.sortedBy { TimeOfDay.of(it.timeOfDay).ordinal }.sortedBy { it.status == STATUS_DONE }.forEach {
+            DayRow(it, today, onToggle = { onToggle(it) }, onEdit = { onEdit(it) })
         }
     }
 }
@@ -255,7 +250,7 @@ private fun LegendDot(color: Color) {
     Box(Modifier.size(10.dp).clip(CircleShape).background(color))
 }
 
-/** Compact one-line row for the selected day: tap the circle to tick, tap the row to edit. */
+/** Compact one-line row for the selected day, time-of-day icon on the right: tap the circle to tick, tap the row to edit. */
 @Composable
 private fun DayRow(item: Item, today: Long, onToggle: () -> Unit, onEdit: () -> Unit) {
     val isDone = item.status == STATUS_DONE
@@ -289,6 +284,8 @@ private fun DayRow(item: Item, today: Long, onToggle: () -> Unit, onEdit: () -> 
             color = if (late) Fresh.Coral else Fresh.TextDim,
             maxLines = 1
         )
+        Spacer(Modifier.width(8.dp))
+        TimeIcon(TimeOfDay.of(item.timeOfDay), 18.dp)
     }
 }
 

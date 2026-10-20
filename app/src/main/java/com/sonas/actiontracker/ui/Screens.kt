@@ -319,7 +319,24 @@ fun AppScreen(
     // Opens on Today; Tomorrow, Later and Suggested are a swipe or a tap away.
     val pager = rememberPagerState { TAB_LABELS.size }
     var showUpcoming by rememberSaveable { mutableStateOf(false) }
-    var group by rememberSaveable { mutableStateOf(Group.DATE) }
+    // Each day page keeps its own grouping: Today and Tomorrow by time of day, Later by date.
+    var todayGroup by rememberSaveable { mutableStateOf(Group.TIME) }
+    var tomorrowGroup by rememberSaveable { mutableStateOf(Group.TIME) }
+    var laterGroup by rememberSaveable { mutableStateOf(Group.DATE) }
+    val groupOf: (Int) -> Group = { page ->
+        when (page) {
+            DayPage.TODAY.ordinal -> todayGroup
+            DayPage.TOMORROW.ordinal -> tomorrowGroup
+            else -> laterGroup
+        }
+    }
+    val setGroup: (Int, Group) -> Unit = { page, g ->
+        when (page) {
+            DayPage.TODAY.ordinal -> todayGroup = g
+            DayPage.TOMORROW.ordinal -> tomorrowGroup = g
+            else -> laterGroup = g
+        }
+    }
     // Calendar and Stats share the month (switched from the header) and the picked day.
     var monthIndex by rememberSaveable { mutableIntStateOf(YearMonth.now().toIndex()) }
     var pickedDay by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
@@ -443,7 +460,7 @@ fun AppScreen(
                             )
                         } else if (index < TAB_SUGGESTED) {
                             DayPageList(
-                                DayPage.entries[index], dayPages[index], group, showUpcoming,
+                                DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
                                 onToggleUpcoming = { showUpcoming = !showUpcoming },
                                 vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo
                             )
@@ -480,7 +497,7 @@ fun AppScreen(
                     showUndo("Added \"${draft.title}\"", null)
                 },
                 contextual = {
-                    if (tab < TAB_SUGGESTED) GroupMenu(group) { group = it }
+                    if (tab < TAB_SUGGESTED) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
                     else if (tab == TAB_SUGGESTED && suggested.isNotEmpty()) {
                         DockChip("All ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
                     }
