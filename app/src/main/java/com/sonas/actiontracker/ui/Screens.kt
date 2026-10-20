@@ -11,6 +11,14 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.activity.compose.BackHandler
+import java.time.YearMonth
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -66,6 +74,8 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -111,9 +121,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -124,7 +131,6 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -189,8 +195,11 @@ enum class Group(val label: String) { TIME("Time"), DATE("Date"), PERSON("Person
 private const val DAY_MS = 86_400_000L
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
 private val PILL = RoundedCornerShape(50)
-private const val TAB_ACTIONS = 0
-private val TAB_LABELS = listOf("Actions", "Suggested")
+/** The dock's tabs: the three day pages, Suggested, Calendar and Stats. Swipe or tap between them. */
+private val TAB_LABELS = DayPage.entries.map { it.label } + listOf("Suggested", "Calendar", "Stats")
+private val TAB_SUGGESTED = DayPage.entries.size
+private val TAB_CALENDAR = TAB_SUGGESTED + 1
+private val TAB_STATS = TAB_SUGGESTED + 2
 private val ROW_SHAPE = RoundedCornerShape(18.dp)
 
 private fun today(): Long = LocalDate.now().toEpochDay()
@@ -307,9 +316,30 @@ fun AppScreen(
 ) {
     val suggested by vm.suggested.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(TAB_ACTIONS) }
-    var group by rememberSaveable { mutableStateOf(Group.DATE) }
-    var insights by rememberSaveable { mutableStateOf(false) }
+    // Opens on Today; Tomorrow, Later and Suggested are a swipe or a tap away.
+    val pager = rememberPagerState { TAB_LABELS.size }
+    var showUpcoming by rememberSaveable { mutableStateOf(false) }
+    // Each day page keeps its own grouping: Today and Tomorrow by time of day, Later by date.
+    var todayGroup by rememberSaveable { mutableStateOf(Group.TIME) }
+    var tomorrowGroup by rememberSaveable { mutableStateOf(Group.TIME) }
+    var laterGroup by rememberSaveable { mutableStateOf(Group.DATE) }
+    val groupOf: (Int) -> Group = { page ->
+        when (page) {
+            DayPage.TODAY.ordinal -> todayGroup
+            DayPage.TOMORROW.ordinal -> tomorrowGroup
+            else -> laterGroup
+        }
+    }
+    val setGroup: (Int, Group) -> Unit = { page, g ->
+        when (page) {
+            DayPage.TODAY.ordinal -> todayGroup = g
+            DayPage.TOMORROW.ordinal -> tomorrowGroup = g
+            else -> laterGroup = g
+        }
+    }
+    // Calendar and Stats share the month (switched from the header) and the picked day.
+    var monthIndex by rememberSaveable { mutableIntStateOf(YearMonth.now().toIndex()) }
+    var pickedDay by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     var editing by remember { mutableStateOf<Item?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
     var photoDraft by remember { mutableStateOf<PhotoDraft.Draft?>(null) }
@@ -380,43 +410,60 @@ fun AppScreen(
         }
     }
     vm.message?.let { lastMessage = it }
-    val open = remember(actions, today()) { actions.filter { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } }
+    val dayPages = remember(actions, today()) { DayPage.entries.map { actions.onPage(it, today()) } }
+    val tabCounts = remember(dayPages, suggested) {
+        dayPages.map { list -> list.count { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } } + suggested.size
+    }
+    val tab = pager.currentPage
+    val goTo: (Int) -> Unit = { scope.launch { pager.animateScrollToPage(it) } }
+    // Back from any other page returns to Today before leaving the app.
+    BackHandler(enabled = tab != 0) { goTo(0) }
 
     AuroraBackground {
-        if (insights) {
-            InsightsScreen(
-                actions,
-                topBar = { TopBar(counts = listOf(open.size, suggested.size), open = open) },
-                onClose = { insights = false },
-                onToggle = { vm.toggleDone(it) },
-                onEdit = { editing = it }
+        // Thumb-first: a slim header on top names the page (its date, title or month); the type bar,
+        // group-by, menu and tabs sit in a two-row bottom dock, and lists are anchored to the bottom so
+        // the most urgent row is nearest the thumb. Side insets keep it clear of the camera cutout.
+        Column(
+            Modifier.fillMaxSize()
+                // The list sits low on a sunken tint; the header and dock panels float above it.
+                .background(Fresh.Recess)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+        ) {
+            PageHeader(
+                tab, monthOf(monthIndex),
+                onPrevMonth = { monthIndex-- },
+                onNextMonth = { monthIndex++ }
             )
-        } else {
-            // Thumb-first: a calm slim bar on top for rare actions; tabs, stats and the type bar sit in
-            // a bottom dock, and the Actions list is anchored to the bottom so the most urgent row is
-            // nearest the thumb. Side insets keep it clear of the camera cutout in landscape.
-            Column(
-                Modifier.fillMaxSize()
-                    // The list sits low on a sunken tint; the stats and dock panels float above it.
-                    .background(Fresh.Recess)
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            AnimatedVisibility(
+                visible = vm.message != null,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                TopBar(counts = listOf(open.size, suggested.size), open = open)
-                AnimatedVisibility(
-                    visible = vm.message != null,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
+                MessageBanner(lastMessage, onClose = { vm.message = null })
+            }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                PullToRefreshBox(
+                    isRefreshing = vm.syncing,
+                    onRefresh = onSync,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    MessageBanner(lastMessage, onClose = { vm.message = null })
-                }
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    PullToRefreshBox(
-                        isRefreshing = vm.syncing,
-                        onRefresh = onSync,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (tab == TAB_ACTIONS) {
-                            ActionsList(actions, group, vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo)
+                    HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { index ->
+                        if (index >= TAB_CALENDAR) {
+                            InsightsPage(
+                                stats = index == TAB_STATS,
+                                actions = actions,
+                                month = monthOf(monthIndex),
+                                selected = pickedDay,
+                                onSelect = { pickedDay = it },
+                                onToggle = { vm.toggleDone(it) },
+                                onEdit = { editing = it }
+                            )
+                        } else if (index < TAB_SUGGESTED) {
+                            DayPageList(
+                                DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
+                                onToggleUpcoming = { showUpcoming = !showUpcoming },
+                                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo
+                            )
                         } else {
                             SuggestedDeck(
                                 suggested, vm,
@@ -431,40 +478,40 @@ fun AppScreen(
                             )
                         }
                     }
-                    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
                 }
-                BottomDock(
-                    tab = tab,
-                    onTab = { tab = it },
-                    counts = listOf(open.size, suggested.size),
-                    people = people,
-                    contexts = contexts,
-                    usualContexts = usualContexts,
-                    onNew = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
-                    onVoice = startListening,
-                    onAdd = { draft ->
-                        tab = TAB_ACTIONS
-                        saveNow(Item.blank(), draft, SeriesScope.THIS)
-                        showUndo("Added \"${draft.title}\"", null)
-                    },
-                    contextual = {
-                        if (tab == TAB_ACTIONS) GroupMenu(group) { group = it }
-                        else if (suggested.isNotEmpty()) DockChip("Add all ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
-                    },
-                    tools = {
-                        GlassIconButton(onClick = { insights = true }) {
-                            Icon(Icons.Rounded.DateRange, "Calendar and stats", tint = Fresh.Text, modifier = Modifier.size(20.dp))
-                        }
-                        SyncButton(vm.syncing, onSync)
-                        MoreMenu(
-                            lockEnabled, onLockChange,
-                            onOpenSlotReminders = { slotReminders = true },
-                            onOpenPermissions = { permissions = true },
-                            onOpenBackup = onOpenBackup
-                        )
-                    }
-                )
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
             }
+            BottomDock(
+                tab = tab,
+                onTab = goTo,
+                counts = tabCounts,
+                people = people,
+                contexts = contexts,
+                usualContexts = usualContexts,
+                onNew = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
+                onVoice = startListening,
+                onAdd = { draft ->
+                    // Show the page the new action lands on.
+                    goTo(dayPageOf(draft.dueDate, today()).ordinal)
+                    saveNow(Item.blank(), draft, SeriesScope.THIS)
+                    showUndo("Added \"${draft.title}\"", null)
+                },
+                contextual = {
+                    if (tab < TAB_SUGGESTED) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
+                    else if (tab == TAB_SUGGESTED && suggested.isNotEmpty()) {
+                        DockChip("All ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
+                    }
+                },
+                menu = {
+                    MoreMenu(
+                        vm.syncing, onSync,
+                        lockEnabled, onLockChange,
+                        onOpenSlotReminders = { slotReminders = true },
+                        onOpenPermissions = { permissions = true },
+                        onOpenBackup = onOpenBackup
+                    )
+                }
+            )
         }
     }
 
@@ -591,9 +638,20 @@ fun AppScreen(
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
-/** The slim top bar: just the Late / Today / Open / Inbox pills, read at a glance. Calendar and Stats show it too. */
+/**
+ * The slim top bar names the page: today's or tomorrow's date, "Later", "Suggested", or the month
+ * on Calendar and Stats (with arrows to change it).
+ */
 @Composable
-internal fun TopBar(counts: List<Int>, open: List<Item>) {
+private fun PageHeader(tab: Int, month: YearMonth, onPrevMonth: () -> Unit, onNextMonth: () -> Unit) {
+    val (caption, title) = when (tab) {
+        DayPage.TODAY.ordinal -> "Today" to LocalDate.now().format(HEADER_DAY_FORMAT)
+        DayPage.TOMORROW.ordinal -> "Tomorrow" to LocalDate.now().plusDays(1).format(HEADER_DAY_FORMAT)
+        DayPage.LATER.ordinal -> "After tomorrow" to "Later"
+        TAB_SUGGESTED -> "From Gmail and Calendar" to "Suggested"
+        TAB_CALENDAR -> "Calendar" to month.format(MONTH_FORMAT)
+        else -> "Stats" to month.format(MONTH_FORMAT)
+    }
     // Its own white panel, running up under the status bar, with rounded lower corners.
     Box(
         // zIndex keeps its shadow above the list, which is drawn after it.
@@ -601,18 +659,40 @@ internal fun TopBar(counts: List<Int>, open: List<Item>) {
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
         contentAlignment = Alignment.Center
     ) {
-        StatsStrip(
-            open, inbox = counts[1],
-            Modifier.fillMaxWidth().widthIn(max = 720.dp).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp)
-        )
+        Row(
+            Modifier.fillMaxWidth().widthIn(max = 720.dp).height(56.dp).padding(start = 20.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(caption.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim, maxLines = 1)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Fresh.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (tab >= TAB_CALENDAR) {
+                GlassIconButton(onClick = onPrevMonth) {
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", tint = Fresh.Text)
+                }
+                Spacer(Modifier.width(8.dp))
+                GlassIconButton(onClick = onNextMonth) {
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next month", tint = Fresh.Text)
+                }
+            }
+        }
     }
 }
 
+private val HEADER_DAY_FORMAT = DateTimeFormatter.ofPattern("EEEE, MMMM d")
+
 /**
- * Everything the thumb touches, at the bottom: a tools row (group-by on Actions or "Add all" on
- * Suggested on the left, today's date in the middle, calendar/stats, sync and menu on the right under
- * the right thumb), then the type-to-capture bar (with its live chips), then the Actions | Suggested
- * tabs. While the keyboard is up only the bar shows. On wide windows it is one row: tabs, bar, then the tools.
+ * Everything the thumb touches, in two rows at the bottom: the contextual chip (group-by on the day
+ * pages, "All N" on Suggested), the type-to-capture bar and the ⋮ menu; then the
+ * Today | Tomorrow | Later | Suggested | Calendar | Stats tabs. While the keyboard is up only the bar
+ * shows. On wide windows it is one row: tabs, chip, bar, menu.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -627,7 +707,7 @@ private fun BottomDock(
     onVoice: () -> Unit,
     onAdd: (Item) -> Unit,
     contextual: @Composable () -> Unit,
-    tools: @Composable () -> Unit
+    menu: @Composable () -> Unit
 ) {
     val typing = WindowInsets.isImeVisible
     BoxWithConstraints(
@@ -638,24 +718,28 @@ private fun BottomDock(
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp)
     ) {
         val wide = maxWidth >= 600.dp
-        if (wide) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                HomeTabs(tab, counts, onTab, Modifier.width(280.dp))
-                Spacer(Modifier.width(12.dp))
+        val barRow: @Composable (Modifier) -> Unit = { modifier ->
+            Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+                if (!typing) {
+                    contextual()
+                    Spacer(Modifier.width(8.dp))
+                }
                 CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.weight(1f))
                 if (!typing) {
-                    Spacer(Modifier.width(12.dp))
-                    Row(Modifier.height(50.dp), verticalAlignment = Alignment.CenterVertically) {
-                        contextual()
-                        Spacer(Modifier.width(8.dp))
-                        tools()
-                    }
+                    Spacer(Modifier.width(8.dp))
+                    menu()
                 }
+            }
+        }
+        if (wide) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HomeTabs(tab, counts, onTab, Modifier.width(480.dp))
+                Spacer(Modifier.width(12.dp))
+                barRow(Modifier.weight(1f))
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!typing) ToolsRow(contextual, tools, middle = { TodayLabel() })
-                CaptureBar(people, contexts, usualContexts, onNew, onVoice, onAdd, Modifier.fillMaxWidth())
+                barRow(Modifier.fillMaxWidth())
                 if (!typing) HomeTabs(tab, counts, onTab, Modifier.fillMaxWidth())
             }
         }
@@ -665,36 +749,7 @@ private fun BottomDock(
 /** The bottom dock's white panel: rounded top corners, running down under the navigation bar. */
 internal val DOCK_SHAPE = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
-/**
- * A screen's contextual chip on the left, its icon buttons on the right and an optional [middle]
- * (today's date on the main screen) centred in the space between them.
- */
-@Composable
-internal fun ToolsRow(
-    contextual: @Composable () -> Unit,
-    tools: @Composable () -> Unit,
-    middle: (@Composable () -> Unit)? = null
-) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        contextual()
-        Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) { middle?.invoke() }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { tools() }
-    }
-}
-
-/** Today's date ("Sun, Oct 18") for the gap in the tools row; ellipsizes rather than crowd the icons. */
-@Composable
-private fun TodayLabel() {
-    Text(
-        LocalDate.now().format(DAY_FORMAT),
-        style = MaterialTheme.typography.titleSmall,
-        color = Fresh.TextDim,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
-}
-
-/** Small glass chip used for the dock's contextual action ("Add all"). */
+/** Small glass chip used for the dock's contextual action ("All N" adds every suggestion). */
 @Composable
 private fun DockChip(label: String, icon: ImageVector, tint: Color, onClick: () -> Unit) {
     Row(
@@ -834,8 +889,8 @@ private fun InfoChip(label: String, dot: Color) {
 }
 
 /**
- * Two-segment control. Each segment always shows its count badge (dimmed at zero), so nothing
- * appears or disappears when switching tabs and the bar never reflows.
+ * Today | Tomorrow | Later | Suggested, then Calendar and Stats as icon tabs. Each text tab stacks
+ * its label over its count (dimmed at zero) so six fit a phone and nothing reflows when switching.
  */
 @Composable
 private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -846,96 +901,70 @@ private fun HomeTabs(tab: Int, counts: List<Int>, onSelect: (Int) -> Unit, modif
         TAB_LABELS.forEachIndexed { i, label ->
             val selected = tab == i
             val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "tabFg")
-            Row(
-                Modifier.weight(1f).fillMaxHeight().clip(PILL)
-                    .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier)
-                    .clickable { onSelect(i) }
-                    .padding(start = 14.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = fg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(Modifier.width(6.dp))
-                CountBadge(counts[i], selected)
+            val cell = Modifier.fillMaxHeight().clip(PILL)
+                .then(if (selected) Modifier.background(Fresh.accentHorizontal) else Modifier)
+                .clickable(onClickLabel = label) { onSelect(i) }
+            if (i >= TAB_CALENDAR) {
+                Box(cell.width(42.dp).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+                    if (i == TAB_CALENDAR) Icon(Icons.Rounded.DateRange, null, tint = fg, modifier = Modifier.size(20.dp))
+                    else StatsGlyph(fg)
+                }
+            } else {
+                val countColor = when {
+                    selected -> Color.White.copy(alpha = 0.85f)
+                    counts[i] > 0 -> Fresh.Indigo
+                    else -> Fresh.TextDim.copy(alpha = 0.6f)
+                }
+                Column(
+                    cell.weight(1f).padding(horizontal = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                        color = fg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        if (counts[i] > 99) "99+" else "${counts[i]}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = countColor,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
 }
 
+/** Three rising bars: the Stats tab's icon (the core icon set has no chart). */
 @Composable
-private fun CountBadge(count: Int, selected: Boolean) {
-    val bg = when {
-        selected -> Color(0x33FFFFFF)
-        count > 0 -> Fresh.Indigo.copy(alpha = 0.12f)
-        else -> Fresh.Glass
-    }
-    val fg = when {
-        selected -> Color.White
-        count > 0 -> Fresh.Indigo
-        else -> Fresh.TextDim
-    }
-    Box(
-        Modifier.widthIn(min = 22.dp).clip(PILL).background(bg).padding(horizontal = 6.dp, vertical = 1.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(if (count > 99) "99+" else "$count", style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1)
+private fun StatsGlyph(color: Color) {
+    Canvas(Modifier.size(18.dp)) {
+        val bar = size.width / 5
+        listOf(0.45f, 0.75f, 1f).forEachIndexed { i, h ->
+            drawRoundRect(
+                color,
+                topLeft = Offset(bar * (i * 2), size.height * (1 - h)),
+                size = Size(bar, size.height * h),
+                cornerRadius = CornerRadius(bar / 2)
+            )
+        }
     }
 }
 
-/** The four stats (late, today, open, inbox) as small one-line glass pills. */
-@Composable
-private fun StatsStrip(open: List<Item>, inbox: Int, modifier: Modifier = Modifier) {
-    val t = today()
-    val overdue = open.count { it.dueDate < t }
-    val dueToday = open.count { it.dueDate == t }
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        MiniStat("Late", overdue, if (overdue > 0) Fresh.Coral else Fresh.Text, Modifier.weight(1f))
-        MiniStat("Today", dueToday, Fresh.Sky, Modifier.weight(1f))
-        MiniStat("Open", open.size, Fresh.Text, Modifier.weight(1f))
-        MiniStat("Inbox", inbox, Fresh.Teal, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun MiniStat(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    val shown by animateFloatAsState(value.toFloat(), tween(600), label = "stat")
-    Row(
-        // Tinted in the stat's own colour, so the pills read as numbers, not as buttons or rows.
-        modifier.height(44.dp).clip(RoundedCornerShape(14.dp))
-            .background((if (color == Fresh.Text) Fresh.Indigo else color).copy(alpha = 0.10f))
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("${shown.toInt()}", style = MaterialTheme.typography.titleLarge, color = color, maxLines = 1)
-        Spacer(Modifier.width(6.dp))
-        Text(
-            label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            color = Fresh.TextDim,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-/** Small glass pill showing the current grouping; tap for Date / Person / Context. */
+/** Small pill left of the type bar showing the current grouping; tap for Date / Time / Person / Context. */
 @Composable
 private fun GroupMenu(group: Group, onGroup: (Group) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.height(36.dp).well(PILL).clickable { open = true }.padding(start = 12.dp, end = 4.dp),
+            Modifier.height(36.dp).well(PILL).clickable { open = true }.padding(start = 12.dp, end = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("By ${group.label.lowercase()}", style = MaterialTheme.typography.labelLarge, color = Fresh.Text, maxLines = 1)
+            Text(group.label, style = MaterialTheme.typography.labelLarge, color = Fresh.Text, maxLines = 1)
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Group by", tint = Fresh.TextDim)
         }
         DropdownMenu(
@@ -970,25 +999,9 @@ internal fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, conte
 }
 
 @Composable
-private fun SyncButton(syncing: Boolean, onSync: () -> Unit) {
-    val spin = rememberInfiniteTransition(label = "spin")
-    val angle by spin.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
-        label = "angle"
-    )
-    GlassIconButton(onClick = onSync, enabled = !syncing) {
-        Icon(
-            Icons.Rounded.Refresh,
-            contentDescription = if (syncing) "Syncing" else "Sync",
-            tint = if (syncing) Fresh.Sky else Fresh.Text,
-            modifier = Modifier.size(20.dp).then(if (syncing) Modifier.rotate(angle) else Modifier)
-        )
-    }
-}
-
-@Composable
 private fun MoreMenu(
+    syncing: Boolean,
+    onSync: () -> Unit,
     lockEnabled: Boolean,
     onLockChange: (Boolean) -> Unit,
     onOpenSlotReminders: () -> Unit,
@@ -1004,6 +1017,12 @@ private fun MoreMenu(
             shape = MaterialTheme.shapes.medium,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
+            DropdownMenuItem(
+                text = { Text(if (syncing) "Syncing…" else "Sync now") },
+                leadingIcon = { Icon(Icons.Rounded.Refresh, null, tint = if (syncing) Fresh.Sky else Fresh.Text) },
+                enabled = !syncing,
+                onClick = { open = false; onSync() }
+            )
             DropdownMenuItem(
                 text = { Text("Fingerprint lock") },
                 trailingIcon = { Switch(checked = lockEnabled, onCheckedChange = null) },
@@ -1021,44 +1040,6 @@ private fun MoreMenu(
                 text = { Text("Permissions & features") },
                 onClick = { open = false; onOpenPermissions() }
             )
-        }
-    }
-}
-
-/** Glass capsule with a gradient pill that slides between the two tabs. */
-@Composable
-internal fun TabSwitcher(
-    tab: Int,
-    labels: List<String>,
-    counts: List<Int>,
-    onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    BoxWithConstraints(modifier.height(40.dp).well(PILL).padding(3.dp)) {
-        val segment = maxWidth / labels.size
-        val x by animateDpAsState(segment * tab, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow), label = "tab")
-        Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(PILL).background(Fresh.accentHorizontal))
-        Row(Modifier.fillMaxSize()) {
-            labels.forEachIndexed { i, label ->
-                val selected = tab == i
-                val fg by animateColorAsState(if (selected) Color.White else Fresh.TextDim, label = "fg")
-                Row(
-                    Modifier.weight(1f).fillMaxHeight().clip(PILL).clickable { onSelect(i) },
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(label, style = MaterialTheme.typography.labelLarge, color = fg)
-                    if (counts[i] > 0) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(
-                            Modifier.clip(PILL).background(if (selected) Color(0x33FFFFFF) else Fresh.Glass)
-                                .padding(horizontal = 7.dp, vertical = 1.dp)
-                        ) {
-                            Text("${counts[i]}", style = MaterialTheme.typography.labelMedium, color = fg)
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -1401,16 +1382,18 @@ private fun Stamp(text: String, color: Color, alpha: Float, modifier: Modifier =
 private data class Section(val key: String, val label: String, val items: List<Item>)
 
 @Composable
-private fun ActionsList(
+private fun DayPageList(
+    page: DayPage,
     actions: List<Item>,
     group: Group,
+    showUpcoming: Boolean,
+    onToggleUpcoming: () -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit
 ) {
-    var showUpcoming by rememberSaveable { mutableStateOf(false) }
-    // Regrouped only when the list, grouping, Upcoming toggle or day changes, not on every recomposition.
-    val (upcoming, sections) = remember(actions, group, showUpcoming, today()) { buildSections(actions, group, showUpcoming) }
+    // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
+    val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
     // Anchored to the bottom (reverseLayout): the first section's first row sits right above the
     // dock, later sections float up, and a short list rests on the dock instead of the top bar.
@@ -1423,13 +1406,14 @@ private fun ActionsList(
     ) {
         if (sections.isEmpty()) {
             item(key = "empty") {
+                val (title, body) = when (page) {
+                    DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Tomorrow."
+                    DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
+                    DayPage.LATER -> "Nothing planned later" to "Actions due after tomorrow show up here."
+                }
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Nothing yet", style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        "Type a task below, or review Suggested.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Fresh.TextDim
-                    )
+                    Text(title, style = MaterialTheme.typography.headlineMedium)
+                    Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
                 }
             }
         }
@@ -1447,7 +1431,7 @@ private fun ActionsList(
                 if (section.key == UPCOMING_KEY) {
                     GroupHeader(
                         section.label, upcoming.size, group,
-                        Modifier.animateItem().clickable { showUpcoming = !showUpcoming },
+                        Modifier.animateItem().clickable(onClick = onToggleUpcoming),
                         trailing = if (showUpcoming) "Hide" else "Show"
                     )
                 } else {
@@ -1514,6 +1498,7 @@ private fun GroupHeader(label: String, count: Int, group: Group, modifier: Modif
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActionRow(
     item: Item,
@@ -1524,36 +1509,13 @@ private fun ActionRow(
     modifier: Modifier = Modifier
 ) {
     val isDone = item.status == STATUS_DONE
-    // Swipe either way past the threshold to delete; the list's animateItem() closes the gap.
-    // A repeating row springs back while the "which occurrences?" dialog asks.
-    val swipe = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) onDelete()
-            value != SwipeToDismissBoxValue.Settled && item.seriesId == null
-        }
-    )
-    SwipeToDismissBox(
-        state = swipe,
-        modifier = modifier,
-        backgroundContent = {
-            // Only paint while a swipe is in progress: the glass row is translucent, so a
-            // resting red layer would tint every row and show the trash icon through it.
-            val direction = swipe.dismissDirection
-            if (direction != SwipeToDismissBoxValue.Settled) {
-                Box(
-                    Modifier.fillMaxSize().clip(ROW_SHAPE).background(Fresh.Coral.copy(alpha = 0.9f))
-                        .padding(horizontal = 20.dp),
-                    contentAlignment = if (direction == SwipeToDismissBoxValue.EndToStart) Alignment.CenterEnd else Alignment.CenterStart
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                }
-            }
-        }
-    ) {
+    // Sideways swipes change pages, so delete is a long-press: Delete in a small menu, with Undo after.
+    var menu by remember { mutableStateOf(false) }
+    Box(modifier) {
         Row(
             Modifier.fillMaxWidth()
                 .glass(ROW_SHAPE, strong = true)
-                .clickable(onClick = onEdit)
+                .combinedClickable(onClick = onEdit, onLongClickLabel = "Delete options", onLongClick = { menu = true })
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1598,6 +1560,13 @@ private fun ActionRow(
                 Spacer(Modifier.width(6.dp))
             }
             TimeIcon(TimeOfDay.of(item.timeOfDay))
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fresh.Coral) },
+                onClick = { menu = false; onDelete() }
+            )
         }
     }
 }

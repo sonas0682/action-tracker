@@ -74,21 +74,22 @@ Nano only runs while the app is open, and only on phones that support it.
 
 ## Features
 
-- **Thumb-first layout**: the top bar only shows the Late / Today / Open / Inbox counts. Everything
-  you tap is at the bottom: a tools row (group-by, or "Add all" on Suggested, on the left; today's
-  date in the middle; calendar/stats, sync and ⋮ on the right), then the type bar, then the
-  Actions | Suggested tabs. The list is
-  anchored to the bottom so the most urgent task is right above your thumb. Calendar and Stats use
-  the same layout, with the same counts on top: month switcher and close above the Calendar | Stats tabs.
+- **Thumb-first layout**: the top bar names the page you're on: today's or tomorrow's date,
+  Later, Suggested, or the month on Calendar and Stats (with arrows to change it). Everything you
+  tap is in two rows at the bottom: group-by (or "All N" on Suggested), the type bar and the ⋮ menu
+  (with Sync now); then the Today | Tomorrow | Later | Suggested | Calendar | Stats tabs. Lists are
+  anchored to the bottom so the most urgent task is right above your thumb.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.
 - **Suggested inbox**: tasks found in Gmail and Calendar wait here as a stack of cards. Swipe right
-  to add, left to skip, up to edit first (or use the buttons under the cards), with Undo; "Add all"
-  in the bottom tools row takes them all. The same email or event is never suggested twice.
+  to add, left to skip, up to edit first (or use the buttons under the cards), with Undo; "All N"
+  left of the type bar takes them all. The same email or event is never suggested twice.
 - **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
 - **Time of day**: each task is Morning, Afternoon, Evening or Night.
-- **Group** the list by date, time of day, person or context (Work, Family, Kids/School).
+- **Today / Tomorrow / Later pages**: the app opens on Today (overdue plus due today, and anything finished today). Swipe sideways, or tap the bottom tabs, to move to Tomorrow, Later (everything after tomorrow, including Upcoming repeats), Suggested, Calendar and Stats; each task tab shows its count. Back returns to Today.
+- **Group** each page by date, time of day, person or context (Work, Family, Kids/School). Today and
+  Tomorrow start grouped by time of day, Later by date; each page remembers its own choice.
 - **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
   one off queues the next.
 - **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what
@@ -101,8 +102,8 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
 - **Home-screen widget**: Today and Tomorrow tabs; tick tasks off from the home screen. Task
   titles are visible there even when the app lock is on.
-- **Calendar and stats**: the calendar icon shows a month view and how many tasks you finished.
-- **Swipe to delete**, with Undo.
+- **Calendar and stats**: the last two tabs show a month view and how many tasks you finished.
+- **Long-press to delete** (sideways swipes change pages), with Undo.
 - **Fingerprint lock** (optional) and **screenshot blocking**.
 - **Encrypted Google Drive backup**, restored on a new phone with your backup passphrase.
 - **Crash report**: after a crash, the next launch shows the error so it can be shared.

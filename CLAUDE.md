@@ -43,8 +43,8 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
 | `sync/TaskNotifications.kt` | One notification per reminder listing its tasks (Snooze 30 min; Done only when it lists one task); no per-task notifications |
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
-| `ui/Screens.kt`, `MainVM.kt` | Main screen (stats-only top bar, bottom dock with type bar, tools row + tabs, bottom-anchored list, Suggested swipe deck), edit sheet, swipe-to-delete |
-| `ui/Insights.kt` | Calendar + stats view |
+| `ui/Screens.kt`, `MainVM.kt` | Main screen (page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Today / Tomorrow / Later / Suggested / Calendar / Stats pages in a swipeable pager, bottom-anchored lists, Suggested swipe deck), edit sheet, long-press delete |
+| `ui/Insights.kt` | Calendar and Stats pages (`InsightsPage`) |
 | `ui/Voice.kt`, `Photo.kt`, `BackupUi.kt`, `Theme.kt` | Listen sheet, photo button + draft note, backup dialog, light "Fresh" palette + `glass()` |
 | `widget/DueWidget.kt` | Glance Today/Tomorrow widget |
 
@@ -66,7 +66,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 - **Permissions**: the app must work on any Android 11+ device with any permission denied or
   Nano missing. A new permission, scope or model needs a row in `Features` and in the README
   permissions tables saying what stops working without it. No `USE_EXACT_ALARM` (Play-restricted).
-- **UI**: follow `.claude/rules/ui-style.md` (thumb-first bottom dock, slim top bar, icon-only +, swipe delete with Undo).
+- **UI**: follow `.claude/rules/ui-style.md` (thumb-first bottom dock, slim top bar, icon-only +, long-press delete with Undo).
 
 ## Workflow
 
