@@ -58,7 +58,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * Home-screen widget: Today (overdue included) and Tomorrow tabs with their counts,
+ * Home-screen widget: Now (today, overdue included) and Near (tomorrow) tabs with their counts,
  * and the selected day's open actions as cards under Morning / Afternoon / Evening /
  * Night headers. Tap a tab to switch days, tap the
  * circle to mark an action done, tap anything else to open the app.
@@ -180,9 +180,9 @@ private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean) {
         }
         Spacer(GlanceModifier.height(8.dp))
         Row(modifier = GlanceModifier.fillMaxWidth()) {
-            DayTab("Today", today.size, if (overdue > 0) "$overdue overdue" else null, W.Indigo, !showTomorrow, false, GlanceModifier.defaultWeight())
+            DayTab("Now", today.size, if (overdue > 0) "$overdue overdue" else null, W.Indigo, !showTomorrow, false, GlanceModifier.defaultWeight())
             Spacer(GlanceModifier.width(8.dp))
-            DayTab("Tomorrow", tomorrow.size, null, W.Teal, showTomorrow, true, GlanceModifier.defaultWeight())
+            DayTab("Near", tomorrow.size, null, W.Teal, showTomorrow, true, GlanceModifier.defaultWeight())
         }
         Spacer(GlanceModifier.height(8.dp))
         if (shown.isEmpty()) {
