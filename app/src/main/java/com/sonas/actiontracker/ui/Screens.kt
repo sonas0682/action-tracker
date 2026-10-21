@@ -107,6 +107,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -176,6 +177,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sonas.actiontracker.sync.PhotoDraft
 import com.sonas.actiontracker.sync.VoiceDraft
 import com.sonas.actiontracker.R
+import com.sonas.actiontracker.data.GodTheme
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.SeriesScope
@@ -183,6 +185,8 @@ import com.sonas.actiontracker.data.Snapshot
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
+import com.sonas.actiontracker.sync.GOD_LAMP
+import com.sonas.actiontracker.sync.GodTasks
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SlotReminders
 import java.time.LocalDate
@@ -358,6 +362,7 @@ fun AppScreen(
         }
     }
     var slotReminders by remember { mutableStateOf(false) }
+    var godTask by remember { mutableStateOf(false) }
     var permissions by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
@@ -401,6 +406,14 @@ fun AppScreen(
     }
     val deleteWithUndo: (Item) -> Unit = { item ->
         if (item.seriesId != null) pendingDelete = item else deleteNow(item, SeriesScope.THIS)
+    }
+    /** Long-press on an open God task: a new one from the same theme, with Undo back to the old one. */
+    val replaceGod: (Item) -> Unit = { item ->
+        scope.launch {
+            val fresh = runCatching { vm.replaceGodTask(item) }.getOrNull()
+            if (fresh == null) vm.message = "No other God task to swap in"
+            else showUndo("New God task: \"${fresh.title}\"") { vm.restore(item) }
+        }
     }
     val saveNow: (Item, Item, SeriesScope) -> Unit = { original, edited, which ->
         scope.launch {
@@ -462,7 +475,7 @@ fun AppScreen(
                             DayPageList(
                                 DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
                                 onToggleUpcoming = { showUpcoming = !showUpcoming },
-                                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo
+                                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod
                             )
                         } else {
                             SuggestedDeck(
@@ -507,6 +520,7 @@ fun AppScreen(
                         vm.syncing, onSync,
                         lockEnabled, onLockChange,
                         onOpenSlotReminders = { slotReminders = true },
+                        onOpenGodTask = { godTask = true },
                         onOpenPermissions = { permissions = true },
                         onOpenBackup = onOpenBackup
                     )
@@ -635,6 +649,7 @@ fun AppScreen(
     }
 
     if (slotReminders) RemindersDialog(onDismiss = { slotReminders = false })
+    if (godTask) GodTaskDialog(onPick = vm::setGodTheme, onDismiss = { godTask = false })
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
@@ -1005,6 +1020,7 @@ private fun MoreMenu(
     lockEnabled: Boolean,
     onLockChange: (Boolean) -> Unit,
     onOpenSlotReminders: () -> Unit,
+    onOpenGodTask: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenBackup: () -> Unit
 ) {
@@ -1031,6 +1047,11 @@ private fun MoreMenu(
             DropdownMenuItem(
                 text = { Text("Reminders") },
                 onClick = { open = false; onOpenSlotReminders() }
+            )
+            DropdownMenuItem(
+                text = { Text("God task") },
+                leadingIcon = { Text(GOD_LAMP) },
+                onClick = { open = false; onOpenGodTask() }
             )
             DropdownMenuItem(
                 text = { Text("Google Drive backup") },
@@ -1143,6 +1164,48 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
             }
         )
     }
+}
+
+/** ⋮ → God task: Random (the default) or one theme, used on weekends too; or Off. */
+@Composable
+private fun GodTaskDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    var choice by remember { mutableStateOf(GodTasks.choice(context)) }
+    val options = listOf(GodTasks.RANDOM) + GodTheme.entries.map { it.name } + GodTasks.OFF
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$GOD_LAMP  God task") },
+        text = {
+            Column {
+                Text(
+                    "Each morning a short task (under 15 minutes) is added to today's Evening: one on weekdays, " +
+                        "three on weekends. One left undone moves to the next day instead of a new one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Fresh.TextDim
+                )
+                Spacer(Modifier.height(8.dp))
+                options.forEach { option ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
+                            .clickable { choice = option; onPick(option) }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = choice == option, onClick = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(GodTasks.choiceLabel(option), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "A new theme applies from the next morning.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Fresh.TextDim
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
 }
 
 @Composable
@@ -1390,7 +1453,8 @@ private fun DayPageList(
     onToggleUpcoming: () -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit,
-    onDelete: (Item) -> Unit
+    onDelete: (Item) -> Unit,
+    onReplace: (Item) -> Unit
 ) {
     // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
@@ -1432,6 +1496,7 @@ private fun DayPageList(
                     onToggle = { vm.toggleDone(item) },
                     onEdit = { onEdit(item) },
                     onDelete = { onDelete(item) },
+                    onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
                     modifier = Modifier.animateItem()
                 )
             }
@@ -1503,22 +1568,34 @@ private fun ActionRow(
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onReplace: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isDone = item.status == STATUS_DONE
+    val god = GodTasks.isGod(item)
     // Sideways swipes change pages, so delete is a long-press: Delete in a small menu, with Undo after.
     var menu by remember { mutableStateOf(false) }
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth()
-                .glass(ROW_SHAPE, strong = true)
-                .combinedClickable(onClick = onEdit, onLongClickLabel = "Delete options", onLongClick = { menu = true })
+                .then(
+                    if (god) Modifier.clip(ROW_SHAPE).background(Fresh.GoldWash).border(1.5.dp, Fresh.GoldRim, ROW_SHAPE)
+                    else Modifier.glass(ROW_SHAPE, strong = true)
+                )
+                .combinedClickable(onClick = onEdit, onLongClickLabel = if (onReplace != null) "Another God task or delete" else "Delete options", onLongClick = { menu = true })
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             GlowCheck(isDone, onToggle)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
+                if (god) {
+                    Text(
+                        "$GOD_LAMP  GOD TASK",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Fresh.Gold
+                    )
+                }
                 Text(
                     item.title,
                     style = MaterialTheme.typography.titleSmall,
@@ -1559,6 +1636,13 @@ private fun ActionRow(
             TimeIcon(TimeOfDay.of(item.timeOfDay))
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (onReplace != null) {
+                DropdownMenuItem(
+                    text = { Text("Another God task") },
+                    leadingIcon = { Text(GOD_LAMP) },
+                    onClick = { menu = false; onReplace() }
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Delete") },
                 leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fresh.Coral) },

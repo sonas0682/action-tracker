@@ -51,6 +51,10 @@ object Fresh {
     val Rim = Color(0x1A1B1D33)
     /** Sunken tint laid over the aurora behind the list, so the white panels and rows lift off it. */
     val Recess = Color(0xB3E4E7F3)
+    /** God task card: a solid saffron wash with a gold rim and gold label. */
+    val Gold = Color(0xFFB7791F)
+    val GoldWash = Color(0xFFFFF4DB)
+    val GoldRim = Color(0xFFF0C35A)
 
     val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
     val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))

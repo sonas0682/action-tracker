@@ -67,6 +67,7 @@ All AI runs on the phone. Nothing is sent to an AI service.
 | Email titles and summaries | Gemini Nano writes a clean one-line title and a three-bullet summary | The title comes from the email subject and built-in rules |
 | Voice capture | Gemini Nano tidies the spoken words | The built-in rules pick out the title, date, person and repeat |
 | Photo and shared text | Gemini Nano titles and summarizes long text | The most task-like sentence becomes the title |
+| God task | Picked from the built-in list (Gemini Nano can't write new ones on current phones: free-form generation isn't offered on the S25 Ultra, and Nano can't run in the morning while the app is closed) | Same |
 | Dates in photos and shared text | ML Kit's date model finds dates and times | Simple date rules ("Friday", "Oct 24", "tomorrow") until the small model downloads once |
 
 Basic mode is not an error: every feature still works, the wording is just simpler. Gemini
@@ -95,6 +96,13 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what
   is due. Each reminder is one notification with Snooze 30 min (and Done when it lists one task).
   Notifications also show on a paired watch.
+- **God task** (⋮ → God task): every morning at 6 AM a short task (under 15 minutes) lands in
+  today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends. Themes are
+  Gratitude, Leadership, Networking, Health and Family (Family tasks rotate Nathiya, Vibu and
+  Dharshu); pick one or leave it on Random (the default; also used on weekends), or turn it Off.
+  Long-press one for **Another God task** (same theme, Undo brings the old one back). One left
+  undone moves to the next day and counts toward that day's number.
+  Tasks come from a built-in list of 30 per theme and don't repeat within 60 days.
 - **Voice capture**: long-press + and say the task, for example "remind me to sign Vibu's
   permission slip by Friday".
 - **Photo to task**: tap +, then the camera icon, or share a photo or screenshot to the app.

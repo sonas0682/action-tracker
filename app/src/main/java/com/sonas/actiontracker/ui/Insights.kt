@@ -49,6 +49,8 @@ import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
+import com.sonas.actiontracker.sync.GOD_LAMP
+import com.sonas.actiontracker.sync.GodTasks
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -269,7 +271,7 @@ private fun DayRow(item: Item, today: Long, onToggle: () -> Unit, onEdit: () -> 
         }
         Spacer(Modifier.width(10.dp))
         Text(
-            item.title,
+            if (GodTasks.isGod(item)) "$GOD_LAMP ${item.title}" else item.title,
             style = MaterialTheme.typography.titleSmall,
             color = if (isDone) Fresh.TextDim else Fresh.Text,
             textDecoration = if (isDone) TextDecoration.LineThrough else null,

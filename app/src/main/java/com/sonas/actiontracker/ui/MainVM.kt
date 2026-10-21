@@ -17,6 +17,7 @@ import com.sonas.actiontracker.data.Snapshot
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.sync.Backup
+import com.sonas.actiontracker.sync.GodTasks
 import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
@@ -52,6 +53,23 @@ class MainVM(app: Application) : AndroidViewModel(app) {
             runCatching { Series.topUpAll(db) }
             runCatching { DueWidget.refresh(getApplication()) }
         }
+    }
+
+    /** Adds this morning's God tasks on app open if the 15-minute reminder check hasn't yet. */
+    fun godTasks() = viewModelScope.launch { addGodTasks() }
+
+    /** Saves the ⋮ → God task theme; turning it on adds today's right away (after 6 AM). */
+    fun setGodTheme(choice: String) = viewModelScope.launch {
+        GodTasks.setChoice(getApplication(), choice)
+        addGodTasks()
+    }
+
+    /** Long-press "Another God task": swaps it for a new one from the same theme. Returns the new row. */
+    suspend fun replaceGodTask(item: Item): Item? =
+        GodTasks.replace(getApplication(), item).also { if (it != null) afterWrite() }
+
+    private suspend fun addGodTasks() {
+        if (runCatching { GodTasks.ensureToday(getApplication()) }.getOrDefault(false)) afterWrite()
     }
 
     /** Confirms a suggestion: it becomes a regular open action. */

@@ -58,7 +58,7 @@ data class Item(
     /** Due date as epoch day (LocalDate.toEpochDay). */
     val dueDate: Long,
     val status: String,
-    /** GMAIL, CALENDAR or CUSTOM. */
+    /** GMAIL, CALENDAR, CUSTOM, VOICE, PHOTO, SHARE or GOD (a daily God task). */
     val source: String,
     val createdAt: Long = System.currentTimeMillis(),
     /**
@@ -128,6 +128,14 @@ interface ItemDao {
     /** Every row of a repeating series, skipped ones included, earliest first. */
     @Query("SELECT * FROM items WHERE seriesId = :seriesId ORDER BY dueDate, id")
     suspend fun series(seriesId: Long): List<Item>
+
+    /** Unfinished God tasks from before [epochDay]; they carry over instead of going overdue. */
+    @Query("SELECT * FROM items WHERE source = 'GOD' AND status = 'OPEN' AND dueDate < :epochDay")
+    suspend fun openGodBefore(epochDay: Long): List<Item>
+
+    /** God tasks on [epochDay], open or done; they count toward the day's number. */
+    @Query("SELECT COUNT(*) FROM items WHERE source = 'GOD' AND dueDate = :epochDay AND status IN ('OPEN', 'DONE')")
+    suspend fun godCountOn(epochDay: Long): Int
 
     @Query("SELECT DISTINCT seriesId FROM items WHERE seriesId IS NOT NULL")
     suspend fun seriesIds(): List<Long>
