@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Window background behind the Compose UI, matching Fresh.Canvas in ui/Theme.kt. -->
+    <!-- Window background behind the Compose UI, matching Fresh.Canvas (light / dark) in ui/Theme.kt. -->
     <color name="canvas">#FFF6F7FC</color>
+    <color name="canvas_dark">#FF0F1120</color>
 </resources>

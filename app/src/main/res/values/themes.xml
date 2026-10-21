@@ -1,5 +1,5 @@
 <resources>
-    <!-- Always light: the app draws its own "Fresh" theme (see ui/Theme.kt). -->
+    <!-- The app draws its own "Fresh" theme (see ui/Theme.kt); this only colours the start-up window. -->
     <style name="Theme.ActionTracker" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/canvas</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

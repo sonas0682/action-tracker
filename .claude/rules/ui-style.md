@@ -8,8 +8,12 @@ paths:
 # UI style (Sona's preferences)
 
 App
-- Light "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
-  accents. Not a traditional Material look, and not dark.
+- "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
+  accents; not a traditional Material look. A dark variant (deep ink canvas, slate cards, brighter
+  accents) is chosen in ⋮ → Theme: System default (the default), Light or Dark, saved in the "ui"
+  prefs as `ThemePref` (added 2026-10-21 at Sona's request). Every `Fresh` colour has a light and
+  a dark shade: add new colours there with both, never as a raw `Color(0x…)` in a screen, or they
+  stay light in dark mode. "White" below means `Fresh.GlassStrong` (slate in dark mode).
 - Thumb-first (since 2026-10-18; reshaped 2026-10-20 at Sona's request): the slim top bar is a
   page header, a small caption over a title: today's/tomorrow's full date, "Later", "Suggested", or
   the month on Calendar and Stats with ‹ › arrows. No stats pills on top. The bottom dock has only
@@ -50,7 +54,8 @@ App
 
 Widget (`widget/DueWidget.kt`)
 - Today/Tomorrow tabs, single-line card rows grouped under time-of-day headers, person tag on
-  every row (including "Me"). Fixed light colors to match the app.
+  every row (including "Me"). Colors mirror the app's `Fresh` palette in both shades and follow
+  the same Theme setting (System uses Glance day/night colors).
 - No summary text and no refresh button; Sona removed both. It updates on its own.
 
 Resources
