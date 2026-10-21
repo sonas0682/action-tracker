@@ -77,8 +77,8 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Thumb-first layout**: the top bar names the page you're on: today's or tomorrow's date,
   Later, Suggested, or the month on Calendar and Stats (with arrows to change it). Everything you
   tap is in two rows at the bottom: group-by (or "All N" on Suggested), the type bar and the ⋮ menu
-  (with Sync now); then the Today | Tomorrow | Later | Suggested | Calendar | Stats tabs. Lists are
-  anchored to the bottom so the most urgent task is right above your thumb.
+  (with Sync now); then the Today | Tomorrow | Later | Suggested | Calendar | Stats tabs. Lists read
+  top to bottom (Morning, Afternoon, Evening, Night) and a short list rests right above your thumb.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.

@@ -25,8 +25,9 @@ App
   stat pills are tinted in their own colour, so pills, controls and list rows never look alike.
 - No tall headlines or stat tiles. Task tabs always show their count, dimmed at zero, so nothing
   reflows on switch.
-- The Actions list is anchored to the bottom (`reverseLayout`): the first section's first row sits
-  right above the dock, later sections and Done float up. Each section emits rows, then its header.
+- The Actions list reads top to bottom (Morning → Night, Overdue → later dates, then Upcoming and
+  Done; Sona's choice 2026-10-21) and a short list rests on the dock (`Arrangement.Bottom`, no
+  `reverseLayout`). Each section emits its header, then its rows.
 - The dock's one tab row is Today | Tomorrow | Later | Suggested (label over count) plus icon-only
   Calendar and Stats tabs, so six fit a phone. Today opens on launch; overdue and anything finished today show on Today. The pages sit
   in a `HorizontalPager`: swipe sideways anywhere (or tap a tab) to move between them; Back goes to Today.

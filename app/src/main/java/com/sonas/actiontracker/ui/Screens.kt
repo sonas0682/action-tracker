@@ -1395,14 +1395,12 @@ private fun DayPageList(
     // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
-    // Anchored to the bottom (reverseLayout): the first section's first row sits right above the
-    // dock, later sections float up, and a short list rests on the dock instead of the top bar.
-    // So each section emits its rows first and its header last, which puts the header above them.
+    // Reads top to bottom (Morning → Night, Overdue → later dates, then Upcoming and Done), and a
+    // short list rests on the dock instead of hanging from the top bar (Bottom arrangement).
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        reverseLayout = true
+        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom)
     ) {
         if (sections.isEmpty()) {
             item(key = "empty") {
@@ -1418,15 +1416,6 @@ private fun DayPageList(
             }
         }
         sections.forEach { section ->
-            items(section.items, key = { it.id }) { item ->
-                ActionRow(
-                    item, if (section.key == UPCOMING_KEY) Group.TIME else group,
-                    onToggle = { vm.toggleDone(item) },
-                    onEdit = { onEdit(item) },
-                    onDelete = { onDelete(item) },
-                    modifier = Modifier.animateItem()
-                )
-            }
             item(key = section.key) {
                 if (section.key == UPCOMING_KEY) {
                     GroupHeader(
@@ -1437,6 +1426,15 @@ private fun DayPageList(
                 } else {
                     GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
                 }
+            }
+            items(section.items, key = { it.id }) { item ->
+                ActionRow(
+                    item, if (section.key == UPCOMING_KEY) Group.TIME else group,
+                    onToggle = { vm.toggleDone(item) },
+                    onEdit = { onEdit(item) },
+                    onDelete = { onDelete(item) },
+                    modifier = Modifier.animateItem()
+                )
             }
         }
     }
