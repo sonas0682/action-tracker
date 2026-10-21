@@ -40,6 +40,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/VoiceDraft.kt` | Spoken sentence to draft `Item` (rules + Nano proofreading) |
 | `sync/PhotoDraft.kt` | Photo, shared image or shared text to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
 | `sync/GodTasks.kt`, `data/GodTaskLibrary.kt` | Daily God task (source `GOD`, Evening, 1 weekday / 3 weekend, carry-over, 60-day no-repeat), 30 tasks per theme |
+| `data/Thoughts.kt` | Thought of the day lines (bottom of Now, new one per launch) |
 | `sync/Reminders.kt` | 8 AM daily digest; `ReminderWorker` runs every 15 min |
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
 | `sync/TaskNotifications.kt` | One notification per reminder listing its tasks (Snooze 30 min; Done only when it lists one task); no per-task notifications |
