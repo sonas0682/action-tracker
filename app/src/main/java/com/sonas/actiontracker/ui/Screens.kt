@@ -1462,58 +1462,58 @@ private fun DayPageList(
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
     // Reads top to bottom from the top bar: Morning → Night, Overdue → later dates, then Upcoming and Done.
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        if (sections.isEmpty()) {
-            item(key = "empty") {
-                val (title, body) = when (page) {
-                    DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Near."
-                    DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
-                    DayPage.LATER -> "Nothing planned next" to "Actions due after tomorrow show up here."
-                }
-                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(title, style = MaterialTheme.typography.headlineMedium)
-                    Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
+    // Now keeps its Thought of the day pinned at the bottom, just above the dock; the list scrolls above it.
+    Column(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (sections.isEmpty()) {
+                item(key = "empty") {
+                    val (title, body) = when (page) {
+                        DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Near."
+                        DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
+                        DayPage.LATER -> "Nothing planned next" to "Actions due after tomorrow show up here."
+                    }
+                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(title, style = MaterialTheme.typography.headlineMedium)
+                        Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
+                    }
                 }
             }
-        }
-        sections.forEach { section ->
-            item(key = section.key) {
-                if (section.key == UPCOMING_KEY) {
-                    GroupHeader(
-                        section.label, upcoming.size, group,
-                        Modifier.animateItem().clickable(onClick = onToggleUpcoming),
-                        trailing = if (showUpcoming) "Hide" else "Show"
+            sections.forEach { section ->
+                item(key = section.key) {
+                    if (section.key == UPCOMING_KEY) {
+                        GroupHeader(
+                            section.label, upcoming.size, group,
+                            Modifier.animateItem().clickable(onClick = onToggleUpcoming),
+                            trailing = if (showUpcoming) "Hide" else "Show"
+                        )
+                    } else {
+                        GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
+                    }
+                }
+                items(section.items, key = { it.id }) { item ->
+                    ActionRow(
+                        item, if (section.key == UPCOMING_KEY) Group.TIME else group,
+                        onToggle = { vm.toggleDone(item) },
+                        onEdit = { onEdit(item) },
+                        onDelete = { onDelete(item) },
+                        onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
+                        modifier = Modifier.animateItem()
                     )
-                } else {
-                    GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
                 }
             }
-            items(section.items, key = { it.id }) { item ->
-                ActionRow(
-                    item, if (section.key == UPCOMING_KEY) Group.TIME else group,
-                    onToggle = { vm.toggleDone(item) },
-                    onEdit = { onEdit(item) },
-                    onDelete = { onDelete(item) },
-                    onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
-                    modifier = Modifier.animateItem()
-                )
-            }
         }
-        // Last line of Now, just above the dock.
-        if (page == DayPage.TODAY) {
-            item(key = "thought") { ThoughtLine(vm.thought, Modifier.animateItem()) }
-        }
+        if (page == DayPage.TODAY) ThoughtLine(vm.thought, Modifier.padding(horizontal = 16.dp))
     }
 }
 
 /** Thought of the day: a quiet italic line with its source, no card, so it never reads as a task. */
 @Composable
 private fun ThoughtLine(thought: Thought, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp)) {
+    Column(modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 10.dp)) {
         Text("THOUGHT OF THE DAY", style = MaterialTheme.typography.labelSmall, color = Fresh.Indigo)
         Spacer(Modifier.height(4.dp))
         Text(

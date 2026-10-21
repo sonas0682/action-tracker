@@ -103,8 +103,9 @@ Nano only runs while the app is open, and only on phones that support it.
   Long-press one for **Another God task** (same theme, Undo brings the old one back). One left
   undone moves to the next day and counts toward that day's number.
   Tasks come from a built-in list of 30 per theme and don't repeat within 60 days.
-- **Thought of the day**: one short line at the bottom of Now, from the Stoics, the Bhagavad Gita,
-  the Thirukkural, Rumi or Peter Drucker; a different one on every launch.
+- **Thought of the day**: one short line pinned at the bottom of Now, just above the bottom bar,
+  from the Stoics, the Bhagavad Gita, the Thirukkural, Rumi or Peter Drucker; a different one on
+  every launch.
 - **Voice capture**: long-press + and say the task, for example "remind me to sign Vibu's
   permission slip by Friday".
 - **Photo to task**: tap +, then the camera icon, or share a photo or screenshot to the app.
