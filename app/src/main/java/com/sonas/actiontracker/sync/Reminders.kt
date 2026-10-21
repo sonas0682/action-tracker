@@ -10,6 +10,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.widget.DueWidget
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -44,13 +45,14 @@ object Reminders {
 
     /**
      * Starts or stops the periodic check to match the saved settings. Safe to call on every launch.
-     * The check also backs up the time-of-day reminders, so it runs while either kind is on.
+     * The check also backs up the time-of-day reminders and adds the morning's God tasks, so it
+     * runs while any of them is on.
      */
     fun schedule(context: Context) {
         // Builds before the fixed 8 AM digest saved a custom reminder time here.
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("hour").remove("minute").apply()
         val wm = WorkManager.getInstance(context)
-        if (!enabled(context) && !SlotReminders.anyEnabled(context)) {
+        if (!enabled(context) && !SlotReminders.anyEnabled(context) && !GodTasks.enabled(context)) {
             wm.cancelUniqueWork(WORK)
             return
         }
@@ -96,6 +98,11 @@ object Reminders {
 
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        // God tasks first, so the 8 AM digest lists them.
+        if (runCatching { GodTasks.ensureToday(applicationContext) }.getOrDefault(false)) {
+            runCatching { DueWidget.refresh(applicationContext) }
+            runCatching { Backup.backUpSoon(applicationContext) }
+        }
         runCatching { Reminders.checkAndNotify(applicationContext) }
         runCatching { SlotReminders.catchUp(applicationContext) }
         return Result.success()

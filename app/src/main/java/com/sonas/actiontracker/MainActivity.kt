@@ -187,6 +187,7 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         if (crashScreen) return
+        vm.godTasks()
         if (!lockEnabled) {
             vm.smartTitles()
             return

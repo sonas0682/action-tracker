@@ -59,7 +59,8 @@ object TaskNotifications {
     fun line(item: Item, todayEpoch: Long): String {
         val who = if (item.person != "Me") " · ${item.person}" else ""
         val late = if (item.dueDate < todayEpoch) "Overdue: " else ""
-        return "$late${item.title}$who"
+        val lamp = if (GodTasks.isGod(item)) "$GOD_LAMP " else ""
+        return "$late$lamp${item.title}$who"
     }
 
     /** Done is offered only when the reminder lists a single task, so a tap can't tick the wrong one. */

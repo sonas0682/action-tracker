@@ -54,6 +54,8 @@ import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Backup
+import com.sonas.actiontracker.sync.GOD_LAMP
+import com.sonas.actiontracker.sync.GodTasks
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -141,6 +143,8 @@ private object W {
     val TealSoft = Color(0xFFD3F5F0)
     val CoralSoft = Color(0xFFFFE3E1)
     val Grey = Color(0xFFECEDF5)
+    /** God task tile: the app's saffron wash. */
+    val GoldWash = Color(0xFFFFF4DB)
     val Text = Color(0xFF1B1D33)
     val TextDim = Color(0xFF6A6E8C)
     val White = Color(0xFFFFFFFF)
@@ -266,10 +270,11 @@ private fun TimeHeader(time: TimeOfDay, accent: Color) {
 private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
     val overdueDays = epochDay - item.dueDate
     val tint = if (overdueDays > 0) W.Coral else accent
+    val god = GodTasks.isGod(item)
     // One line per action: tick circle, title (gives way first), then late / person / context tags.
     Column(modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(W.Tile)
+            modifier = GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(if (god) W.GoldWash else W.Tile)
                 .padding(start = 2.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -285,7 +290,7 @@ private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    item.title, maxLines = 1,
+                    if (god) "$GOD_LAMP ${item.title}" else item.title, maxLines = 1,
                     modifier = GlanceModifier.defaultWeight(),
                     style = TextStyle(color = c(W.Text), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 )
