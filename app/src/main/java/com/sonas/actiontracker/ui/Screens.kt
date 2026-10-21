@@ -148,6 +148,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -182,6 +183,7 @@ import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.SeriesScope
 import com.sonas.actiontracker.data.Snapshot
+import com.sonas.actiontracker.data.Thought
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
@@ -1501,6 +1503,25 @@ private fun DayPageList(
                 )
             }
         }
+        // Last line of Now, just above the dock.
+        if (page == DayPage.TODAY) {
+            item(key = "thought") { ThoughtLine(vm.thought, Modifier.animateItem()) }
+        }
+    }
+}
+
+/** Thought of the day: a quiet italic line with its source, no card, so it never reads as a task. */
+@Composable
+private fun ThoughtLine(thought: Thought, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp)) {
+        Text("THOUGHT OF THE DAY", style = MaterialTheme.typography.labelSmall, color = Fresh.Indigo)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "\u201C${thought.text}\u201D",
+            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+            color = Fresh.Text
+        )
+        Text("\u2014 ${thought.source}", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
     }
 }
 

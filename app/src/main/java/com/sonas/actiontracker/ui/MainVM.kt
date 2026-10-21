@@ -14,6 +14,8 @@ import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Series
 import com.sonas.actiontracker.data.SeriesScope
 import com.sonas.actiontracker.data.Snapshot
+import com.sonas.actiontracker.data.Thought
+import com.sonas.actiontracker.data.Thoughts
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.sync.Backup
@@ -37,6 +39,13 @@ class MainVM(app: Application) : AndroidViewModel(app) {
 
     val suggested = dao.suggested().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val actions = dao.actions().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Thought of the day at the bottom of Now: a different one on every launch. */
+    val thought: Thought = app.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).let { prefs ->
+        val i = Thoughts.next(prefs.getInt("last_thought", -1))
+        prefs.edit().putInt("last_thought", i).apply()
+        Thoughts.all[i]
+    }
 
     var syncing by mutableStateOf(false)
         private set
