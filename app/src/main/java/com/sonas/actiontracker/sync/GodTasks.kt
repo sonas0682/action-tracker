@@ -24,11 +24,12 @@ const val GOD_LAMP = "\uD83E\uDE94"
  * God tasks: one short activity each weekday and three on Saturday and Sunday, added to today's
  * Evening every morning from [START_TIME]. The theme comes from ⋮ → God task (Random by default,
  * weekends included). An unfinished God task isn't left overdue: it moves to today and counts
- * toward today's number, so new ones only fill the gap. There is no skip or swap.
+ * toward today's number, so new ones only fill the gap.
  *
  * Tasks are picked from [GodTheme.tasks] (Gemini Nano can't write them: the Prompt API doesn't
  * support the S25 Ultra and Nano can't run in the background). A task isn't picked again for
  * [NO_REPEAT_DAYS] days unless its theme has nothing fresher; Family tasks rotate through the family.
+ * Long-pressing an open God task offers "Another God task": a new one from the same theme ([replace]).
  */
 object GodTasks {
     private const val PREFS = "god_tasks"
@@ -94,7 +95,40 @@ object GodTasks {
         carried > 0 || picks.isNotEmpty()
     }
 
+    /**
+     * Swaps open God task [item] for another from the same theme (same person for Family), in
+     * place, and records it in the history. Returns the new row, or null if [item] can't be swapped.
+     */
+    suspend fun replace(context: Context, item: Item, today: LocalDate = LocalDate.now()): Item? = lock.withLock {
+        val prefs = prefs(context)
+        val history = parseHistory(prefs.getStringSet("history", emptySet()).orEmpty())
+        val pick = replacement(item, history, today.toEpochDay(), Random.Default) ?: return@withLock null
+        val db = Db.get(context)
+        val updated = db.withTransaction {
+            val dao = db.dao()
+            val current = dao.byId(item.id)?.takeIf { isGod(it) && it.status == STATUS_OPEN } ?: return@withTransaction null
+            current.copy(title = pick.title).also { dao.update(it) }
+        } ?: return@withLock null
+        val t = today.toEpochDay()
+        prefs.edit()
+            .putStringSet("history", formatHistory((history + (pick.key to t)).filterValues { t - it < KEEP_DAYS }))
+            .apply()
+        updated
+    }
+
     // ------------------------------------------------------------------ rules (pure, unit-tested)
+
+    /** A different task from [item]'s theme, keeping its person; the current one counts as just used. */
+    fun replacement(item: Item, history: Map<String, Long>, today: Long, random: Random): Pick? {
+        val theme = GodTheme.entries.firstOrNull { it.label == item.context } ?: return null
+        val person = if (theme == GodTheme.FAMILY) item.person else "Me"
+        val used = history.toMutableMap()
+        theme.tasks.indices.filter { theme.tasks[it].replace("{name}", person) == item.title }
+            .forEach { used[key(theme, it)] = today }
+        val index = pickIndex(theme, used, today, random)
+        val title = theme.tasks[index].replace("{name}", person)
+        return if (title == item.title) null else Pick(theme, index, title, person)
+    }
 
     data class Pick(val theme: GodTheme, val index: Int, val title: String, val person: String) {
         val key: String get() = key(theme, index)

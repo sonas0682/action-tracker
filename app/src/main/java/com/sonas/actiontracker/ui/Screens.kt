@@ -407,6 +407,14 @@ fun AppScreen(
     val deleteWithUndo: (Item) -> Unit = { item ->
         if (item.seriesId != null) pendingDelete = item else deleteNow(item, SeriesScope.THIS)
     }
+    /** Long-press on an open God task: a new one from the same theme, with Undo back to the old one. */
+    val replaceGod: (Item) -> Unit = { item ->
+        scope.launch {
+            val fresh = runCatching { vm.replaceGodTask(item) }.getOrNull()
+            if (fresh == null) vm.message = "No other God task to swap in"
+            else showUndo("New God task: \"${fresh.title}\"") { vm.restore(item) }
+        }
+    }
     val saveNow: (Item, Item, SeriesScope) -> Unit = { original, edited, which ->
         scope.launch {
             val snapshot = runCatching { vm.save(original, edited, which) }
@@ -467,7 +475,7 @@ fun AppScreen(
                             DayPageList(
                                 DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
                                 onToggleUpcoming = { showUpcoming = !showUpcoming },
-                                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo
+                                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod
                             )
                         } else {
                             SuggestedDeck(
@@ -1445,7 +1453,8 @@ private fun DayPageList(
     onToggleUpcoming: () -> Unit,
     vm: MainVM,
     onEdit: (Item) -> Unit,
-    onDelete: (Item) -> Unit
+    onDelete: (Item) -> Unit,
+    onReplace: (Item) -> Unit
 ) {
     // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
@@ -1487,6 +1496,7 @@ private fun DayPageList(
                     onToggle = { vm.toggleDone(item) },
                     onEdit = { onEdit(item) },
                     onDelete = { onDelete(item) },
+                    onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
                     modifier = Modifier.animateItem()
                 )
             }
@@ -1558,6 +1568,7 @@ private fun ActionRow(
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onReplace: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isDone = item.status == STATUS_DONE
@@ -1571,7 +1582,7 @@ private fun ActionRow(
                     if (god) Modifier.clip(ROW_SHAPE).background(Fresh.GoldWash).border(1.5.dp, Fresh.GoldRim, ROW_SHAPE)
                     else Modifier.glass(ROW_SHAPE, strong = true)
                 )
-                .combinedClickable(onClick = onEdit, onLongClickLabel = "Delete options", onLongClick = { menu = true })
+                .combinedClickable(onClick = onEdit, onLongClickLabel = if (onReplace != null) "Another God task or delete" else "Delete options", onLongClick = { menu = true })
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1625,6 +1636,13 @@ private fun ActionRow(
             TimeIcon(TimeOfDay.of(item.timeOfDay))
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (onReplace != null) {
+                DropdownMenuItem(
+                    text = { Text("Another God task") },
+                    leadingIcon = { Text(GOD_LAMP) },
+                    onClick = { menu = false; onReplace() }
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Delete") },
                 leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fresh.Coral) },

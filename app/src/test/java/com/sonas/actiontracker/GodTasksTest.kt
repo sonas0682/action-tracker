@@ -78,6 +78,22 @@ class GodTasksTest {
         assertTrue(picked.size > 1)
     }
 
+    @Test fun replacementKeepsThemeAndPersonButChangesTask() {
+        val today = wed.toEpochDay()
+        val family = Item(title = "Ask Vibu how the day was", person = "Vibu", context = "Family",
+            dueDate = today, status = STATUS_OPEN, source = SOURCE_GOD)
+        repeat(20) {
+            val pick = GodTasks.replacement(family, emptyMap(), today, Random(it))!!
+            assertEquals(GodTheme.FAMILY, pick.theme)
+            assertEquals("Vibu", pick.person)
+            assertTrue(pick.title != family.title && "Vibu" in pick.title)
+        }
+        val health = family.copy(title = "Do 10 pushups", person = "Me", context = "Health")
+        assertEquals(GodTheme.HEALTH, GodTasks.replacement(health, emptyMap(), today, Random(1))!!.theme)
+        // Not a known theme (e.g. edited by hand): nothing to swap from.
+        assertEquals(null, GodTasks.replacement(health.copy(context = "Work"), emptyMap(), today, Random(1)))
+    }
+
     @Test fun historyRoundTrips() {
         val history = mapOf("HEALTH:3" to 20_380L, "FAMILY:0" to 20_381L)
         assertEquals(history, GodTasks.parseHistory(GodTasks.formatHistory(history) + "junk"))

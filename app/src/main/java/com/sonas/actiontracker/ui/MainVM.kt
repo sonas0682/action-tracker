@@ -64,6 +64,10 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         addGodTasks()
     }
 
+    /** Long-press "Another God task": swaps it for a new one from the same theme. Returns the new row. */
+    suspend fun replaceGodTask(item: Item): Item? =
+        GodTasks.replace(getApplication(), item).also { if (it != null) afterWrite() }
+
     private suspend fun addGodTasks() {
         if (runCatching { GodTasks.ensureToday(getApplication()) }.getOrDefault(false)) afterWrite()
     }

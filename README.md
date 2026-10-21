@@ -100,7 +100,8 @@ Nano only runs while the app is open, and only on phones that support it.
   today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends. Themes are
   Gratitude, Leadership, Networking, Health and Family (Family tasks rotate Nathiya, Vibu and
   Dharshu); pick one or leave it on Random (the default; also used on weekends), or turn it Off.
-  No skip or swap: one left undone moves to the next day and counts toward that day's number.
+  Long-press one for **Another God task** (same theme, Undo brings the old one back). One left
+  undone moves to the next day and counts toward that day's number.
   Tasks come from a built-in list of 30 per theme and don't repeat within 60 days.
 - **Voice capture**: long-press + and say the task, for example "remind me to sign Vibu's
   permission slip by Friday".
