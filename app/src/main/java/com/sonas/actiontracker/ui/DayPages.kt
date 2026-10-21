@@ -6,7 +6,7 @@ import java.time.Instant
 import java.time.ZoneId
 
 /** The three day pages before Suggested in the dock. Overdue work sits on Today so nothing late is hidden. */
-enum class DayPage(val label: String) { TODAY("Today"), TOMORROW("Tomorrow"), LATER("Later") }
+enum class DayPage(val label: String) { TODAY("Now"), TOMORROW("Near"), LATER("Next") }
 
 /** Which page an action due on [dueDay] belongs to, given [today] (both epoch days). */
 fun dayPageOf(dueDay: Long, today: Long): DayPage = when {

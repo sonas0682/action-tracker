@@ -639,15 +639,15 @@ fun AppScreen(
 }
 
 /**
- * The slim top bar names the page: today's or tomorrow's date, "Later", "Suggested", or the month
+ * The slim top bar names the page: today's or tomorrow's date, "Next", "Suggested", or the month
  * on Calendar and Stats (with arrows to change it).
  */
 @Composable
 private fun PageHeader(tab: Int, month: YearMonth, onPrevMonth: () -> Unit, onNextMonth: () -> Unit) {
     val (caption, title) = when (tab) {
-        DayPage.TODAY.ordinal -> "Today" to LocalDate.now().format(HEADER_DAY_FORMAT)
-        DayPage.TOMORROW.ordinal -> "Tomorrow" to LocalDate.now().plusDays(1).format(HEADER_DAY_FORMAT)
-        DayPage.LATER.ordinal -> "After tomorrow" to "Later"
+        DayPage.TODAY.ordinal -> "Now" to LocalDate.now().format(HEADER_DAY_FORMAT)
+        DayPage.TOMORROW.ordinal -> "Near" to LocalDate.now().plusDays(1).format(HEADER_DAY_FORMAT)
+        DayPage.LATER.ordinal -> "After tomorrow" to "Next"
         TAB_SUGGESTED -> "From Gmail and Calendar" to "Suggested"
         TAB_CALENDAR -> "Calendar" to month.format(MONTH_FORMAT)
         else -> "Stats" to month.format(MONTH_FORMAT)
@@ -691,7 +691,7 @@ private val HEADER_DAY_FORMAT = DateTimeFormatter.ofPattern("EEEE, MMMM d")
 /**
  * Everything the thumb touches, in two rows at the bottom: the contextual chip (group-by on the day
  * pages, "All N" on Suggested), the type-to-capture bar and the ⋮ menu; then the
- * Today | Tomorrow | Later | Suggested | Calendar | Stats tabs. While the keyboard is up only the bar
+ * Now | Near | Next | Suggested | Calendar | Stats tabs. While the keyboard is up only the bar
  * shows. On wide windows it is one row: tabs, chip, bar, menu.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -889,7 +889,7 @@ private fun InfoChip(label: String, dot: Color) {
 }
 
 /**
- * Today | Tomorrow | Later | Suggested, then Calendar and Stats as icon tabs. Each text tab stacks
+ * Now | Near | Next | Suggested, then Calendar and Stats as icon tabs. Each text tab stacks
  * its label over its count (dimmed at zero) so six fit a phone and nothing reflows when switching.
  */
 @Composable
@@ -1395,19 +1395,18 @@ private fun DayPageList(
     // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
-    // Reads top to bottom (Morning → Night, Overdue → later dates, then Upcoming and Done), and a
-    // short list rests on the dock instead of hanging from the top bar (Bottom arrangement).
+    // Reads top to bottom from the top bar: Morning → Night, Overdue → later dates, then Upcoming and Done.
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (sections.isEmpty()) {
             item(key = "empty") {
                 val (title, body) = when (page) {
-                    DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Tomorrow."
+                    DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Near."
                     DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
-                    DayPage.LATER -> "Nothing planned later" to "Actions due after tomorrow show up here."
+                    DayPage.LATER -> "Nothing planned next" to "Actions due after tomorrow show up here."
                 }
                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(title, style = MaterialTheme.typography.headlineMedium)

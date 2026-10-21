@@ -26,12 +26,13 @@ App
 - No tall headlines or stat tiles. Task tabs always show their count, dimmed at zero, so nothing
   reflows on switch.
 - The Actions list reads top to bottom (Morning → Night, Overdue → later dates, then Upcoming and
-  Done; Sona's choice 2026-10-21) and a short list rests on the dock (`Arrangement.Bottom`, no
-  `reverseLayout`). Each section emits its header, then its rows.
-- The dock's one tab row is Today | Tomorrow | Later | Suggested (label over count) plus icon-only
-  Calendar and Stats tabs, so six fit a phone. Today opens on launch; overdue and anything finished today show on Today. The pages sit
-  in a `HorizontalPager`: swipe sideways anywhere (or tap a tab) to move between them; Back goes to Today.
-  Each day page has its own grouping from the chip: Today and Tomorrow default to Time, Later to
+  Done) and starts at the top under the page header, even when short (no `reverseLayout`; Sona's
+  choice 2026-10-21). Each section emits its header, then its rows.
+- The dock's one tab row is Now | Near | Next | Suggested (label over count) plus icon-only
+  Calendar and Stats tabs, so six fit a phone (Now = today, Near = tomorrow, Next = after tomorrow;
+  renamed 2026-10-21, code keeps `DayPage.TODAY/TOMORROW/LATER`). Now opens on launch; overdue and anything finished today show on Now. The pages sit
+  in a `HorizontalPager`: swipe sideways anywhere (or tap a tab) to move between them; Back goes to Now.
+  Each day page has its own grouping from the chip: Now and Near default to Time, Next to
   Date (Sona's choice 2026-10-20); Person and Context are the alternatives.
 - Calendar's day list is one list (no time-of-day sub-headers), each row with its time-of-day icon
   on the right.
