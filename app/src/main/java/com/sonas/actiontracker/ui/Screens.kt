@@ -148,7 +148,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -1510,18 +1513,62 @@ private fun DayPageList(
     }
 }
 
-/** Thought of the day: a quiet italic line with its source, no card, so it never reads as a task. */
+/**
+ * Thought of the day: a small aurora card (soft indigo → sky → teal wash, two glows, a faint
+ * oversized quote mark) so it reads as a quote, never as a white task row. Built only from
+ * [Fresh] colours, so it follows whatever palette the theme provides.
+ */
 @Composable
 private fun ThoughtLine(thought: Thought, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 10.dp)) {
-        Text("THOUGHT OF THE DAY", style = MaterialTheme.typography.labelSmall, color = Fresh.Indigo)
-        Spacer(Modifier.height(4.dp))
+    val shape = RoundedCornerShape(18.dp)
+    val wash = Brush.linearGradient(
+        listOf(Fresh.Indigo.copy(alpha = 0.16f), Fresh.Sky.copy(alpha = 0.07f), Fresh.Teal.copy(alpha = 0.16f))
+    )
+    val rim = Brush.linearGradient(
+        listOf(Fresh.Indigo.copy(alpha = 0.45f), Fresh.Sky.copy(alpha = 0.25f), Fresh.Teal.copy(alpha = 0.45f))
+    )
+    val indigoGlow = Fresh.Indigo.copy(alpha = 0.18f)
+    val tealGlow = Fresh.Teal.copy(alpha = 0.16f)
+    Box(
+        modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp)
+            .clip(shape)
+            .background(Fresh.GlassStrong)
+            .background(wash)
+            .drawBehind {
+                drawCircle(
+                    Brush.radialGradient(listOf(indigoGlow, Color.Transparent), Offset(0f, 0f), size.height * 1.1f),
+                    radius = size.height * 1.1f, center = Offset(0f, 0f)
+                )
+                drawCircle(
+                    Brush.radialGradient(listOf(tealGlow, Color.Transparent), Offset(size.width, size.height), size.height * 1.3f),
+                    radius = size.height * 1.3f, center = Offset(size.width, size.height)
+                )
+            }
+            .border(1.dp, rim, shape)
+    ) {
+        // An oversized open-quote, tucked into the top-right corner as a watermark.
         Text(
-            "\u201C${thought.text}\u201D",
-            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-            color = Fresh.Text
+            "\u201C",
+            Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = (-14).dp).graphicsLayer { alpha = 0.22f },
+            style = TextStyle(
+                brush = Fresh.accent, fontSize = 76.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
         )
-        Text("\u2014 ${thought.source}", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
+        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 40.dp, top = 10.dp, bottom = 10.dp)) {
+            Text(
+                "\u2726  THOUGHT OF THE DAY",
+                style = MaterialTheme.typography.labelSmall.copy(brush = Fresh.accentHorizontal, letterSpacing = 1.2.sp)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                thought.text,
+                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic, fontFamily = FontFamily.Serif),
+                color = Fresh.Text
+            )
+            Spacer(Modifier.height(2.dp))
+            Text("\u2014 ${thought.source}", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
+        }
     }
 }
 
