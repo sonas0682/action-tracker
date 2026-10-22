@@ -45,6 +45,9 @@ App
 - The edit sheet is compact (at most 3/4 of the screen). Person and Context are typeable
   dropdowns of every value already used, so nothing is retyped; no chip rows under them.
   Due/Time and Repeat/Ends sit side by side as dropdown pills.
+- The Thought of the day (bottom of Now) is a compact quote card: an indigo → sky → teal wash
+  with two soft glows, a gradient rim and a faint oversized quote mark, built only from `Fresh`
+  colours so it follows the palette. It must never look like a white task row.
 - Rows stay white (solid `glass(strong = true)` in the list, so the recess tint never shows
   through); don't put tinted layers behind translucent rows.
 
