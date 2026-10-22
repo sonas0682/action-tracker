@@ -368,6 +368,7 @@ fun AppScreen(
     }
     var slotReminders by remember { mutableStateOf(false) }
     var godTask by remember { mutableStateOf(false) }
+    var theme by remember { mutableStateOf(false) }
     var permissions by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
@@ -526,6 +527,7 @@ fun AppScreen(
                         lockEnabled, onLockChange,
                         onOpenSlotReminders = { slotReminders = true },
                         onOpenGodTask = { godTask = true },
+                        onOpenTheme = { theme = true },
                         onOpenPermissions = { permissions = true },
                         onOpenBackup = onOpenBackup
                     )
@@ -655,6 +657,7 @@ fun AppScreen(
 
     if (slotReminders) RemindersDialog(onDismiss = { slotReminders = false })
     if (godTask) GodTaskDialog(onPick = vm::setGodTheme, onDismiss = { godTask = false })
+    if (theme) ThemeDialog(ThemePref.mode, onPick = { vm.setThemeMode(it); theme = false }, onDismiss = { theme = false })
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
@@ -1026,6 +1029,7 @@ private fun MoreMenu(
     onLockChange: (Boolean) -> Unit,
     onOpenSlotReminders: () -> Unit,
     onOpenGodTask: () -> Unit,
+    onOpenTheme: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenBackup: () -> Unit
 ) {
@@ -1059,6 +1063,11 @@ private fun MoreMenu(
                 onClick = { open = false; onOpenGodTask() }
             )
             DropdownMenuItem(
+                text = { Text("Theme") },
+                trailingIcon = { Text(ThemePref.mode.label, style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim) },
+                onClick = { open = false; onOpenTheme() }
+            )
+            DropdownMenuItem(
                 text = { Text("Google Drive backup") },
                 onClick = { open = false; onOpenBackup() }
             )
@@ -1068,6 +1077,31 @@ private fun MoreMenu(
             )
         }
     }
+}
+
+/** Light, Dark or System default (follows Android's dark mode); tapping one applies it at once. */
+@Composable
+private fun ThemeDialog(current: ThemeMode, onPick: (ThemeMode) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Theme") },
+        text = {
+            Column {
+                ThemeMode.entries.forEach { mode ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
+                            .clickable { onPick(mode) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = mode == current, onClick = { onPick(mode) })
+                        Text(mode.label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
 }
 
 @Composable

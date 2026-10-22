@@ -3,9 +3,11 @@ package com.sonas.actiontracker.widget
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +31,7 @@ import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
+import androidx.glance.color.ColorProvider as DayNightColor
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -56,6 +59,8 @@ import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.GOD_LAMP
 import com.sonas.actiontracker.sync.GodTasks
+import com.sonas.actiontracker.ui.ThemeMode
+import com.sonas.actiontracker.ui.ThemePref
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -76,7 +81,11 @@ class DueWidget : GlanceAppWidget() {
             val dayFlow = remember { DayChoice.flow(context) }
             val items by itemsFlow.collectAsState(initial)
             val showTomorrow by dayFlow.collectAsState(DayChoice.showTomorrow(context))
-            Content(items, today, showTomorrow)
+            val themeFlow = remember { ThemeChoice.flow(context) }
+            val theme by themeFlow.collectAsState(ThemePref.read(context))
+            CompositionLocalProvider(LocalThemeMode provides theme) {
+                Content(items, today, showTomorrow)
+            }
         }
     }
 
@@ -110,6 +119,20 @@ private object DayChoice {
         awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 }
+/** The app's Theme setting ("ui" prefs, see [ThemePref]), watched so the widget recolours with the app. */
+private object ThemeChoice {
+    private const val KEY = "theme"
+
+    fun flow(context: Context): Flow<ThemeMode> = callbackFlow {
+        val p = context.getSharedPreferences("ui", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY) trySend(ThemePref.read(context))
+        }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+}
+
 private val ItemIdKey = ActionParameters.Key<Long>("item_id")
 private val TomorrowParam = ActionParameters.Key<Boolean>("tomorrow")
 
@@ -132,26 +155,37 @@ class SelectDayAction : ActionCallback {
     }
 }
 
-/** The app's light "Fresh" palette (ui/Theme.kt), fixed so the widget matches the app. */
+/** One widget colour: its light and dark "Fresh" shade (ui/Theme.kt). */
+private class Shade(val day: Color, val night: Color)
+
+/** The app's "Fresh" palette in both shades, so the widget matches the app's Theme setting. */
 private object W {
-    val Card = Color(0xFFF6F7FC)
-    val Tile = Color(0xFFFFFFFF)
-    val Indigo = Color(0xFF5B5FEF)
-    val Teal = Color(0xFF12B5A6)
-    val Coral = Color(0xFFE5484D)
-    val IndigoSoft = Color(0xFFE1E2FF)
-    val TealSoft = Color(0xFFD3F5F0)
-    val CoralSoft = Color(0xFFFFE3E1)
-    val Grey = Color(0xFFECEDF5)
+    val Card = Shade(Color(0xFFF6F7FC), Color(0xFF0F1120))
+    val Tile = Shade(Color(0xFFFFFFFF), Color(0xFF1D2035))
+    val Indigo = Shade(Color(0xFF5B5FEF), Color(0xFF7C80FF))
+    val Teal = Shade(Color(0xFF12B5A6), Color(0xFF2CC7B8))
+    val Coral = Shade(Color(0xFFE5484D), Color(0xFFFF6B6E))
+    val IndigoSoft = Shade(Color(0xFFE1E2FF), Color(0xFF2E3170))
+    val TealSoft = Shade(Color(0xFFD3F5F0), Color(0xFF0F4A44))
+    val CoralSoft = Shade(Color(0xFFFFE3E1), Color(0xFF5A1B1E))
+    val Grey = Shade(Color(0xFFECEDF5), Color(0xFF2A2D44))
     /** God task tile: the app's saffron wash. */
-    val GoldWash = Color(0xFFFFF4DB)
-    val Text = Color(0xFF1B1D33)
-    val TextDim = Color(0xFF6A6E8C)
-    val White = Color(0xFFFFFFFF)
-    val WhiteDim = Color(0xD9FFFFFF)
+    val GoldWash = Shade(Color(0xFFFFF4DB), Color(0xFF33280F))
+    val Text = Shade(Color(0xFF1B1D33), Color(0xFFE9EAF6))
+    val TextDim = Shade(Color(0xFF6A6E8C), Color(0xFF9EA2C2))
+    val White = Shade(Color(0xFFFFFFFF), Color(0xFFFFFFFF))
+    val WhiteDim = Shade(Color(0xD9FFFFFF), Color(0xD9FFFFFF))
 }
 
-private fun c(color: Color) = ColorProvider(color)
+/** The app's Light / Dark / System choice; System lets the launcher pick by Android's dark mode. */
+private val LocalThemeMode = staticCompositionLocalOf { ThemeMode.SYSTEM }
+
+@Composable
+private fun c(shade: Shade): ColorProvider = when (LocalThemeMode.current) {
+    ThemeMode.LIGHT -> ColorProvider(shade.day)
+    ThemeMode.DARK -> ColorProvider(shade.night)
+    ThemeMode.SYSTEM -> DayNightColor(day = shade.day, night = shade.night)
+}
 
 private val DayLabel = DateTimeFormatter.ofPattern("EEE, MMM d")
 
@@ -168,7 +202,7 @@ private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean) {
             .fillMaxSize()
             .appWidgetBackground()
             .cornerRadius(24.dp)
-            .background(W.Card)
+            .background(c(W.Card))
             .padding(12.dp)
     ) {
         Row(modifier = GlanceModifier.fillMaxWidth().clickable(open), verticalAlignment = Alignment.CenterVertically) {
@@ -215,13 +249,13 @@ private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean) {
 
 @Composable
 private fun DayTab(
-    label: String, count: Int, sub: String?, accent: Color,
+    label: String, count: Int, sub: String?, accent: Shade,
     selected: Boolean, tomorrow: Boolean, modifier: GlanceModifier
 ) {
     val fg = if (selected) W.White else accent
     Column(
         modifier = modifier.cornerRadius(16.dp)
-            .background(if (selected) accent else W.Tile)
+            .background(c(if (selected) accent else W.Tile))
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .clickable(actionRunCallback<SelectDayAction>(actionParametersOf(TomorrowParam to tomorrow)))
     ) {
@@ -244,7 +278,7 @@ private fun DayTab(
 }
 
 @Composable
-private fun TimeHeader(time: TimeOfDay, accent: Color) {
+private fun TimeHeader(time: TimeOfDay, accent: Shade) {
     val icon = when (time) {
         TimeOfDay.MORNING -> R.drawable.ic_time_morning
         TimeOfDay.EVENING -> R.drawable.ic_time_evening
@@ -267,14 +301,14 @@ private fun TimeHeader(time: TimeOfDay, accent: Color) {
 }
 
 @Composable
-private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
+private fun ActionCard(item: Item, epochDay: Long, accent: Shade) {
     val overdueDays = epochDay - item.dueDate
     val tint = if (overdueDays > 0) W.Coral else accent
     val god = GodTasks.isGod(item)
     // One line per action: tick circle, title (gives way first), then late / person / context tags.
     Column(modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(if (god) W.GoldWash else W.Tile)
+            modifier = GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(c(if (god) W.GoldWash else W.Tile))
                 .padding(start = 2.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -309,10 +343,10 @@ private fun ActionCard(item: Item, epochDay: Long, accent: Color) {
 }
 
 @Composable
-private fun Chip(text: String, bg: Color, fg: Color) {
+private fun Chip(text: String, bg: Shade, fg: Shade) {
     Text(
         text, maxLines = 1,
-        modifier = GlanceModifier.cornerRadius(8.dp).background(bg).padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier = GlanceModifier.cornerRadius(8.dp).background(c(bg)).padding(horizontal = 6.dp, vertical = 2.dp),
         style = TextStyle(color = c(fg), fontSize = 10.sp, fontWeight = FontWeight.Medium)
     )
 }

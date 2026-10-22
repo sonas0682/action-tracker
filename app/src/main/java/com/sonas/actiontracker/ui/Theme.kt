@@ -1,5 +1,7 @@
 package com.sonas.actiontracker.ui
 
+import android.content.Context
+import android.content.res.Configuration
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -8,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -32,35 +38,73 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
 
+/** The app's look: follow Android's dark mode (default), or always light / always dark. */
+enum class ThemeMode(val label: String) { SYSTEM("System default"), LIGHT("Light"), DARK("Dark") }
+
+/** The theme choice, kept in the "ui" prefs (no schema change) and observable from Compose. */
+object ThemePref {
+    private const val KEY = "theme"
+    private fun prefs(context: Context) = context.getSharedPreferences("ui", Context.MODE_PRIVATE)
+
+    fun read(context: Context): ThemeMode =
+        runCatching { ThemeMode.valueOf(prefs(context).getString(KEY, null) ?: "") }.getOrDefault(ThemeMode.SYSTEM)
+
+    /** The current choice for the app UI; [load] fills it at start-up. */
+    var mode by mutableStateOf(ThemeMode.SYSTEM)
+        private set
+
+    fun load(context: Context) { mode = read(context) }
+
+    fun set(context: Context, value: ThemeMode) {
+        prefs(context).edit().putString(KEY, value.name).apply()
+        mode = value
+    }
+
+    /** Whether [mode] means dark right now, given the system setting (for code outside Compose). */
+    fun isDark(context: Context, value: ThemeMode = read(context)): Boolean = when (value) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+    }
+}
+
 /**
  * "Fresh" palette: airy off-white canvas, an indigo → sky → teal accent gradient,
- * soft pastel glows and white glass surfaces.
+ * soft pastel glows and white glass surfaces. In dark mode the same roles map to a deep ink
+ * canvas, slate glass and slightly brighter accents; [AppTheme] flips [dark], and every read
+ * of a colour is snapshot state, so the whole UI (custom colours included) follows.
  */
 object Fresh {
-    val Canvas = Color(0xFFF6F7FC)
-    val Indigo = Color(0xFF5B5FEF)
-    val Teal = Color(0xFF12B5A6)
-    val Amber = Color(0xFFD98200)
-    val Sky = Color(0xFF1E90E8)
-    val Green = Color(0xFF16A36A)
-    val Coral = Color(0xFFE5484D)
-    val Text = Color(0xFF1B1D33)
-    val TextDim = Color(0xFF6A6E8C)
-    val Glass = Color(0xCCFFFFFF)
-    val GlassStrong = Color(0xFFFFFFFF)
-    val Rim = Color(0x1A1B1D33)
+    var dark by mutableStateOf(false)
+        internal set
+
+    private fun pick(light: Long, night: Long) = Color(if (dark) night else light)
+
+    val Canvas get() = pick(0xFFF6F7FC, 0xFF0F1120)
+    val Indigo get() = pick(0xFF5B5FEF, 0xFF7C80FF)
+    val Teal get() = pick(0xFF12B5A6, 0xFF2CC7B8)
+    val Amber get() = pick(0xFFD98200, 0xFFF0A030)
+    val Sky get() = pick(0xFF1E90E8, 0xFF4DA9F2)
+    val Green get() = pick(0xFF16A36A, 0xFF34C185)
+    val Coral get() = pick(0xFFE5484D, 0xFFFF6B6E)
+    val Text get() = pick(0xFF1B1D33, 0xFFE9EAF6)
+    val TextDim get() = pick(0xFF6A6E8C, 0xFF9EA2C2)
+    val Glass get() = pick(0xCCFFFFFF, 0xCC1D2035)
+    val GlassStrong get() = pick(0xFFFFFFFF, 0xFF1D2035)
+    val Rim get() = pick(0x1A1B1D33, 0x24FFFFFF)
     /** Sunken tint laid over the aurora behind the list, so the white panels and rows lift off it. */
-    val Recess = Color(0xB3E4E7F3)
+    val Recess get() = pick(0xB3E4E7F3, 0xB3070812)
     /** God task card: a solid saffron wash with a gold rim and gold label. */
-    val Gold = Color(0xFFB7791F)
-    val GoldWash = Color(0xFFFFF4DB)
-    val GoldRim = Color(0xFFF0C35A)
+    val Gold get() = pick(0xFFB7791F, 0xFFF0C35A)
+    val GoldWash get() = pick(0xFFFFF4DB, 0xFF33280F)
+    val GoldRim get() = pick(0xFFF0C35A, 0xFF8F6B1E)
 
     val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
     val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))
 }
 
-private val FreshColors = lightColorScheme(
+private val FreshColors get() = lightColorScheme(
     primary = Fresh.Indigo,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE1E2FF),
@@ -97,6 +141,43 @@ private val FreshColors = lightColorScheme(
     surfaceContainerHighest = Color(0xFFE5E7F1),
 )
 
+private val FreshDarkColors get() = darkColorScheme(
+    primary = Fresh.Indigo,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF2E3170),
+    onPrimaryContainer = Color(0xFFE1E2FF),
+    secondary = Fresh.Teal,
+    onSecondary = Color(0xFF00201C),
+    secondaryContainer = Color(0xFF0F4A44),
+    onSecondaryContainer = Color(0xFFD3F5F0),
+    tertiary = Fresh.Sky,
+    onTertiary = Color(0xFF00213A),
+    tertiaryContainer = Color(0xFF12405F),
+    onTertiaryContainer = Color(0xFFD6EBFF),
+    error = Fresh.Coral,
+    onError = Color(0xFF410006),
+    errorContainer = Color(0xFF6B1A1D),
+    onErrorContainer = Color(0xFFFFDAD8),
+    background = Fresh.Canvas,
+    onBackground = Fresh.Text,
+    surface = Fresh.Canvas,
+    onSurface = Fresh.Text,
+    surfaceVariant = Color(0xFF2A2D44),
+    onSurfaceVariant = Fresh.TextDim,
+    outline = Color(0xFF6F7390),
+    outlineVariant = Color(0xFF34374F),
+    inverseSurface = Color(0xFFE9EAF6),
+    inverseOnSurface = Color(0xFF1B1D33),
+    inversePrimary = Color(0xFF5B5FEF),
+    surfaceDim = Color(0xFF0F1120),
+    surfaceBright = Color(0xFF2E3149),
+    surfaceContainerLowest = Color(0xFF0A0C18),
+    surfaceContainerLow = Color(0xFF171A2C),
+    surfaceContainer = Color(0xFF1B1E31),
+    surfaceContainerHigh = Color(0xFF23263B),
+    surfaceContainerHighest = Color(0xFF2C2F46),
+)
+
 private val base = Typography()
 
 private val AppTypography = Typography(
@@ -123,10 +204,21 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp),
 )
 
-/** Light Fresh theme. Dialogs, sheets and pickers pick it up through MaterialTheme. */
+/**
+ * Fresh theme, light or dark per [ThemePref.mode] (System follows Android's dark mode).
+ * Dialogs, sheets and pickers pick it up through MaterialTheme.
+ */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = FreshColors, typography = AppTypography, shapes = AppShapes, content = content)
+    val dark = when (ThemePref.mode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+    // Set before anything below reads a Fresh colour, so the first frame is already right.
+    if (Fresh.dark != dark) Fresh.dark = dark
+    val colors = if (dark) FreshDarkColors else FreshColors
+    MaterialTheme(colorScheme = colors, typography = AppTypography, shapes = AppShapes, content = content)
 }
 
 /** Frosted-glass surface: a faint white tint with a light rim, like a pane over the aurora. */

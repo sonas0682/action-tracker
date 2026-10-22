@@ -111,6 +111,8 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Photo to task**: tap +, then the camera icon, or share a photo or screenshot to the app.
   The text is read on the phone; the photo is never stored or uploaded.
 - **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
+- **Theme** (⋮ → Theme): System default (follows Android's dark mode), Light or Dark. The widget
+  follows the same choice.
 - **Home-screen widget**: Now (today) and Near (tomorrow) tabs; tick tasks off from the home screen. Task
   titles are visible there even when the app lock is on.
 - **Calendar and stats**: the last two tabs show a month view and how many tasks you finished.

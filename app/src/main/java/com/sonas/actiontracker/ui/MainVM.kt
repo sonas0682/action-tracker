@@ -68,6 +68,12 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     fun godTasks() = viewModelScope.launch { addGodTasks() }
 
     /** Saves the ⋮ → God task theme; turning it on adds today's right away (after 6 AM). */
+    /** Saves the Light / Dark / System choice; the app recolours at once, the widget on its redraw. */
+    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
+        ThemePref.set(getApplication(), mode)
+        runCatching { DueWidget.refresh(getApplication()) }
+    }
+
     fun setGodTheme(choice: String) = viewModelScope.launch {
         GodTasks.setChoice(getApplication(), choice)
         addGodTasks()

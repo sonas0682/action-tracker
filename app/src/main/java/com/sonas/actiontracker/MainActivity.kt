@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
@@ -18,6 +19,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -41,6 +43,8 @@ import com.sonas.actiontracker.sync.TaskNotifications
 import com.sonas.actiontracker.sync.SyncWorker
 import com.sonas.actiontracker.ui.AppScreen
 import com.sonas.actiontracker.ui.AppTheme
+import com.sonas.actiontracker.ui.Fresh
+import com.sonas.actiontracker.ui.ThemePref
 import com.sonas.actiontracker.ui.BackupDialog
 import com.sonas.actiontracker.ui.LockScreen
 import com.sonas.actiontracker.ui.MainVM
@@ -86,12 +90,18 @@ class MainActivity : FragmentActivity() {
     private val notifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    /** Light bars with dark icons on the light theme, dark bars with light icons on the dark one. */
+    private fun applySystemBars(dark: Boolean) {
+        val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+        else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+        window.setBackgroundDrawable(ColorDrawable(getColor(if (dark) R.color.canvas_dark else R.color.canvas)))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The UI is always light, so keep dark system-bar icons whatever the system theme.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-        )
+        // Light, Dark or System (default): pick the bars and window colour before the first frame.
+        ThemePref.load(this)
+        applySystemBars(ThemePref.isDark(this, ThemePref.mode))
         super.onCreate(savedInstanceState)
         // After a crash, show only the saved trace: the normal start-up may be what crashes.
         if (showLastCrash()) return
@@ -114,6 +124,8 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) takeShared(intent)
         setContent {
             AppTheme {
+                val dark = Fresh.dark
+                LaunchedEffect(dark) { applySystemBars(dark) }
                 if (unlocked) {
                     AppScreen(
                         vm,
@@ -322,7 +334,11 @@ class MainActivity : FragmentActivity() {
             addView(open)
             addView(text)
         }
-        setContentView(android.widget.ScrollView(this).apply { addView(column) })
+        // Plain black-on-white whatever the theme, so the trace stays readable.
+        setContentView(android.widget.ScrollView(this).apply {
+            setBackgroundColor(android.graphics.Color.WHITE)
+            addView(column)
+        })
         return true
     }
 
