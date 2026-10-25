@@ -25,7 +25,7 @@ const val THOUGHT_MARK = "✦"
  */
 object ThoughtTasks {
     private const val PREFS = "thought_task"
-    const val CONTEXT = "Thought"
+    const val CONTEXT = "Thought of the day"
 
     private val lock = Mutex()
 

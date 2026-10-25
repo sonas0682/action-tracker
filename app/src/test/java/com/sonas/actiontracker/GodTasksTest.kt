@@ -102,6 +102,9 @@ class GodTasksTest {
         }
         val health = family.copy(title = "Do 10 pushups", person = "Me", context = "Health")
         assertEquals(GodTheme.HEALTH, GodTasks.replacement(health, emptyMap(), today, Random(1))!!.theme)
+        // Current rows: one "God task" context, theme in sourceRef.
+        val filed = health.copy(context = GodTasks.CONTEXT, sourceRef = GodTheme.HEALTH.name)
+        assertEquals(GodTheme.HEALTH, GodTasks.replacement(filed, emptyMap(), today, Random(1))!!.theme)
         // Not a known theme (e.g. edited by hand): nothing to swap from.
         assertEquals(null, GodTasks.replacement(health.copy(context = "Work"), emptyMap(), today, Random(1)))
     }
@@ -115,7 +118,9 @@ class GodTasksTest {
         val item = GodTasks.Pick(GodTheme.FAMILY, 0, "Ask Vibu how the day was", "Vibu").toItem(wed.toEpochDay())
         assertEquals(SOURCE_GOD, item.source)
         assertEquals("EVENING", item.timeOfDay)
-        assertEquals("Family", item.context)
+        assertEquals("God task", item.context)
+        assertEquals("FAMILY", item.sourceRef)
+        assertEquals(GodTheme.FAMILY, GodTasks.themeOf(item))
         assertEquals(wed.toEpochDay(), item.dueDate)
         assertTrue(GodTasks.isGod(item))
         assertFalse(GodTasks.isGod(item.copy(source = "CUSTOM")))

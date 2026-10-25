@@ -39,13 +39,13 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/SmartTitles.kt` | Gemini Nano summarization: email titles and three-bullet summaries |
 | `sync/VoiceDraft.kt` | Spoken sentence to draft `Item` (rules + Nano proofreading) |
 | `sync/PhotoDraft.kt` | Photo, shared image or shared text to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
-| `sync/GodTasks.kt`, `data/GodTaskLibrary.kt` | Daily God task (source `GOD`, Evening, 1 weekday / 3 weekend by default (0-5 each in ⋮ → God task), carry-over, 60-day no-repeat), 30 tasks per theme |
-| `data/Thoughts.kt`, `sync/ThoughtTasks.kt` | Thought of the day: quote lines, and the daily task (source `THOUGHT`, Morning, one per day, unread one replaced next day; ⋮ switch, on by default) |
+| `sync/GodTasks.kt`, `data/GodTaskLibrary.kt` | Daily God task (source `GOD`, context "God task", theme in `sourceRef`, Evening, 1 weekday / 3 weekend by default (0-5 each in ⋮ → God task), carry-over, 60-day no-repeat), 30 tasks per theme |
+| `data/Thoughts.kt`, `sync/ThoughtTasks.kt` | Thought of the day: quote lines, and the daily task (source `THOUGHT`, context "Thought of the day", Morning, one per day, unread one replaced next day; ⋮ switch, on by default) |
 | `sync/Reminders.kt` | 8 AM daily digest; `ReminderWorker` runs every 15 min |
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
 | `sync/TaskNotifications.kt` | One notification per reminder listing its tasks (Snooze 30 min; Done only when it lists one task); no per-task notifications |
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
-| `ui/Screens.kt`, `MainVM.kt` | Main screen (page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Now / Near / Next (today / tomorrow / later) / Suggested / Calendar / Stats pages in a swipeable pager, top-aligned lists, Suggested swipe deck), edit sheet, long-press delete |
+| `ui/Screens.kt`, `MainVM.kt`, `ContextPages.kt` | Main screen (⋮ → Contexts list and per-context pages, page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Now / Near / Next (today / tomorrow / later) / Suggested / Calendar / Stats pages in a swipeable pager, top-aligned lists, Suggested swipe deck), edit sheet, long-press delete |
 | `ui/Insights.kt` | Calendar and Stats pages (`InsightsPage`) |
 | `ui/Voice.kt`, `Photo.kt`, `BackupUi.kt`, `Theme.kt` | Listen sheet, photo button + draft note, backup dialog, "Fresh" palette (light + dark, `ThemePref` Light / Dark / System in prefs) + `glass()` |
 | `widget/DueWidget.kt` | Glance Today/Tomorrow widget |

@@ -38,6 +38,11 @@ App
   in a `HorizontalPager`: swipe sideways anywhere (or tap a tab) to move between them; Back goes to Now.
   Each day page has its own grouping from the chip: Now and Near default to Time, Next to
   Date (Sona's choice 2026-10-20); Person and Context are the alternatives.
+- Context pages (added 2026-10-25 at Sona's request): ⋮ → Contexts opens a full-screen list
+  (busiest first, open · done counts, "New context…" bar in the dock); a context's page shows its
+  open actions by date, then Upcoming and all Done (newest first), with a type bar that files new
+  actions under that context. Same three zones; the header has a Back button. Tapping a Context
+  group header on a day page opens that page too. Back returns to the list, then home.
 - Calendar's day list is one list (no time-of-day sub-headers), each row with its time-of-day icon
   on the right.
 - Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the

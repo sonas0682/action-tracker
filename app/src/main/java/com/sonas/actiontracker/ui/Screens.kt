@@ -66,6 +66,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -353,6 +354,9 @@ fun AppScreen(
     var monthIndex by rememberSaveable { mutableIntStateOf(YearMonth.now().toIndex()) }
     var pickedDay by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     var editing by remember { mutableStateOf<Item?>(null) }
+    // ⋮ → Contexts opens the list; a context's page opens from it or from a Context group header.
+    var contextsOpen by rememberSaveable { mutableStateOf(false) }
+    var contextPage by rememberSaveable { mutableStateOf<String?>(null) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
     var photoDraft by remember { mutableStateOf<PhotoDraft.Draft?>(null) }
     var readingPhoto by remember { mutableStateOf<String?>(null) }
@@ -393,7 +397,10 @@ fun AppScreen(
         }
     }
     val people = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_PEOPLE) { it.person } }
-    val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
+    // God task and Thought of the day contexts are the app's own, so the edit sheet doesn't offer them.
+    val contexts = remember(actions, suggested) {
+        VoiceDraft.recentValues((actions + suggested).filterNot { GodTasks.isGod(it) || ThoughtTasks.isThought(it) }, VoiceDraft.DEFAULT_CONTEXTS) { it.context }
+    }
     val usualContexts = remember(actions) { VoiceDraft.usualContexts(actions) }
     // A repeating action asks which occurrences first (this one / following / all).
     var pendingDelete by remember { mutableStateOf<Item?>(null) }
@@ -445,104 +452,141 @@ fun AppScreen(
     val goTo: (Int) -> Unit = { scope.launch { pager.animateScrollToPage(it) } }
     // Back from any other page returns to Today before leaving the app.
     BackHandler(enabled = tab != 0) { goTo(0) }
+    // Back from a context page returns to the Contexts list (when it came from there), then home.
+    BackHandler(enabled = contextPage != null || contextsOpen) {
+        if (contextPage != null) contextPage = null else contextsOpen = false
+    }
+    val contextActions = remember(actions, showThought) { if (showThought) actions else actions.filterNot { ThoughtTasks.isThought(it) } }
+    val newInContext: (String) -> Item = { ctx ->
+        Item.blank().copy(context = ctx, timeOfDay = TimeOfDay.defaultFor(ctx).name)
+    }
 
     AuroraBackground {
-        // Thumb-first: a slim header on top names the page (its date, title or month); the type bar,
-        // group-by, menu and tabs sit in a two-row bottom dock, and lists are anchored to the bottom so
-        // the most urgent row is nearest the thumb. Side insets keep it clear of the camera cutout.
-        Column(
-            Modifier.fillMaxSize()
-                // The list sits low on a sunken tint; the header and dock panels float above it.
-                .background(Fresh.Recess)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-        ) {
-            PageHeader(
-                tab, monthOf(monthIndex),
-                onPrevMonth = { monthIndex-- },
-                onNextMonth = { monthIndex++ }
+        val openContext = contextPage
+        if (openContext != null) {
+            ContextScreen(
+                openContext, contextActions, showUpcoming,
+                onToggleUpcoming = { showUpcoming = !showUpcoming },
+                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod,
+                onBack = { contextPage = null },
+                snackbar = snackbar,
+                bar = { modifier ->
+                    Box(modifier) {
+                        CaptureBar(
+                            people, contexts, usualContexts,
+                            onNew = { voiceDraft = null; photoDraft = null; editing = newInContext(openContext) },
+                            onVoice = startListening,
+                            onAdd = { draft ->
+                                saveNow(Item.blank(), draft, SeriesScope.THIS)
+                                showUndo("Added \"${draft.title}\" · ${dayPageOf(draft.dueDate, today()).label}", null)
+                            },
+                            fixedContext = openContext
+                        )
+                    }
+                }
             )
-            AnimatedVisibility(
-                visible = vm.message != null,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+        } else if (contextsOpen) {
+            ContextsScreen(contextActions, onOpen = { contextPage = it }, onBack = { contextsOpen = false })
+        } else {
+            // Thumb-first: a slim header on top names the page (its date, title or month); the type bar,
+            // group-by, menu and tabs sit in a two-row bottom dock, and lists are anchored to the bottom so
+            // the most urgent row is nearest the thumb. Side insets keep it clear of the camera cutout.
+            Column(
+                Modifier.fillMaxSize()
+                    // The list sits low on a sunken tint; the header and dock panels float above it.
+                    .background(Fresh.Recess)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             ) {
-                MessageBanner(lastMessage, onClose = { vm.message = null })
-            }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                PullToRefreshBox(
-                    isRefreshing = vm.syncing,
-                    onRefresh = onSync,
-                    modifier = Modifier.fillMaxSize()
+                PageHeader(
+                    tab, monthOf(monthIndex),
+                    onPrevMonth = { monthIndex-- },
+                    onNextMonth = { monthIndex++ }
+                )
+                AnimatedVisibility(
+                    visible = vm.message != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
                 ) {
-                    HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { index ->
-                        if (index >= TAB_CALENDAR) {
-                            InsightsPage(
-                                stats = index == TAB_STATS,
-                                actions = actions,
-                                month = monthOf(monthIndex),
-                                selected = pickedDay,
-                                onSelect = { pickedDay = it },
-                                onToggle = { vm.toggleDone(it) },
-                                onEdit = { editing = it }
-                            )
-                        } else if (index < TAB_SUGGESTED) {
-                            DayPageList(
-                                DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
-                                onToggleUpcoming = { showUpcoming = !showUpcoming },
-                                vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod
-                            )
-                        } else {
-                            SuggestedDeck(
-                                suggested, vm,
-                                onEdit = { editing = it },
-                                onSync = onSync,
-                                onAdded = { item ->
-                                    // A repeating suggestion fills its series on confirm, so only a one-off can be put back.
-                                    if (item.recurrence == Recurrence.NONE.name) showUndo("Added \"${item.title}\"") { vm.restore(item) }
-                                    else showUndo("Added \"${item.title}\"", null)
-                                },
-                                onSkipped = { item -> showUndo("Skipped \"${item.title}\"") { vm.restore(item) } }
-                            )
+                    MessageBanner(lastMessage, onClose = { vm.message = null })
+                }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    PullToRefreshBox(
+                        isRefreshing = vm.syncing,
+                        onRefresh = onSync,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { index ->
+                            if (index >= TAB_CALENDAR) {
+                                InsightsPage(
+                                    stats = index == TAB_STATS,
+                                    actions = actions,
+                                    month = monthOf(monthIndex),
+                                    selected = pickedDay,
+                                    onSelect = { pickedDay = it },
+                                    onToggle = { vm.toggleDone(it) },
+                                    onEdit = { editing = it }
+                                )
+                            } else if (index < TAB_SUGGESTED) {
+                                DayPageList(
+                                    DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
+                                    onToggleUpcoming = { showUpcoming = !showUpcoming },
+                                    vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod,
+                                    onOpenContext = { contextPage = it }
+                                )
+                            } else {
+                                SuggestedDeck(
+                                    suggested, vm,
+                                    onEdit = { editing = it },
+                                    onSync = onSync,
+                                    onAdded = { item ->
+                                        // A repeating suggestion fills its series on confirm, so only a one-off can be put back.
+                                        if (item.recurrence == Recurrence.NONE.name) showUndo("Added \"${item.title}\"") { vm.restore(item) }
+                                        else showUndo("Added \"${item.title}\"", null)
+                                    },
+                                    onSkipped = { item -> showUndo("Skipped \"${item.title}\"") { vm.restore(item) } }
+                                )
+                            }
                         }
                     }
+                    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
                 }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
-            }
-            BottomDock(
-                tab = tab,
-                onTab = goTo,
-                counts = tabCounts,
-                people = people,
-                contexts = contexts,
-                usualContexts = usualContexts,
-                onNew = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
-                onVoice = startListening,
-                onAdd = { draft ->
-                    // Show the page the new action lands on.
-                    goTo(dayPageOf(draft.dueDate, today()).ordinal)
-                    saveNow(Item.blank(), draft, SeriesScope.THIS)
-                    showUndo("Added \"${draft.title}\"", null)
-                },
-                contextual = {
-                    if (tab < TAB_SUGGESTED) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
-                    else if (tab == TAB_SUGGESTED && suggested.isNotEmpty()) {
-                        DockChip("All ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
+                BottomDock(
+                    tab = tab,
+                    onTab = goTo,
+                    counts = tabCounts,
+                    people = people,
+                    contexts = contexts,
+                    usualContexts = usualContexts,
+                    onNew = { voiceDraft = null; photoDraft = null; editing = Item.blank() },
+                    onVoice = startListening,
+                    onAdd = { draft ->
+                        // Show the page the new action lands on.
+                        goTo(dayPageOf(draft.dueDate, today()).ordinal)
+                        saveNow(Item.blank(), draft, SeriesScope.THIS)
+                        showUndo("Added \"${draft.title}\"", null)
+                    },
+                    contextual = {
+                        if (tab < TAB_SUGGESTED) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
+                        else if (tab == TAB_SUGGESTED && suggested.isNotEmpty()) {
+                            DockChip("All ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
+                        }
+                    },
+                    menu = {
+                        MoreMenu(
+                            vm.syncing, onSync,
+                            lockEnabled, onLockChange,
+                            onOpenSlotReminders = { slotReminders = true },
+                            onOpenGodTask = { godTask = true },
+                            showThought = showThought,
+                            onShowThought = vm::setShowThought,
+                            onOpenTheme = { theme = true },
+                            onOpenPermissions = { permissions = true },
+                            onOpenBackup = onOpenBackup,
+                            onOpenContexts = { contextsOpen = true }
+                        )
                     }
-                },
-                menu = {
-                    MoreMenu(
-                        vm.syncing, onSync,
-                        lockEnabled, onLockChange,
-                        onOpenSlotReminders = { slotReminders = true },
-                        onOpenGodTask = { godTask = true },
-                        showThought = showThought,
-                        onShowThought = vm::setShowThought,
-                        onOpenTheme = { theme = true },
-                        onOpenPermissions = { permissions = true },
-                        onOpenBackup = onOpenBackup
-                    )
-                }
-            )
+                )
+            }
         }
     }
 
@@ -620,7 +664,8 @@ fun AppScreen(
                     listening = false
                     voiceDraft = draft
                     photoDraft = null
-                    editing = draft.item
+                    // Spoken on a context page: file it there like typed ones.
+                    editing = contextPage?.let { draft.item.copy(context = it) } ?: draft.item
                 }
             },
             onDismiss = { if (!drafting) listening = false }
@@ -809,14 +854,20 @@ private fun CaptureBar(
     onNew: () -> Unit,
     onVoice: () -> Unit,
     onAdd: (Item) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fixedContext: String? = null
 ) {
     val haptics = LocalHapticFeedback.current
     var text by rememberSaveable { mutableStateOf("") }
-    val draft = remember(text, people, contexts, usualContexts) {
+    val draft = remember(text, people, contexts, usualContexts, fixedContext) {
         if (text.isBlank()) null
         else VoiceDraft.fromRules(text, people, contexts, LocalDate.now(), usualContexts)
             .copy(source = "CUSTOM", notes = "")
+            .let { d ->
+                // On a context page every action is filed there; time of day follows that context unless typed.
+                if (fixedContext == null) d
+                else d.copy(context = fixedContext, timeOfDay = (VoiceDraft.timeOfDay(text) ?: TimeOfDay.defaultFor(fixedContext)).name)
+            }
             .takeIf { it.title.isNotBlank() }
     }
     val submit = {
@@ -1043,7 +1094,8 @@ private fun MoreMenu(
     onShowThought: (Boolean) -> Unit,
     onOpenTheme: () -> Unit,
     onOpenPermissions: () -> Unit,
-    onOpenBackup: () -> Unit
+    onOpenBackup: () -> Unit,
+    onOpenContexts: () -> Unit
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -1059,6 +1111,11 @@ private fun MoreMenu(
                 leadingIcon = { Icon(Icons.Rounded.Refresh, null, tint = if (syncing) Fresh.Sky else Fresh.Text) },
                 enabled = !syncing,
                 onClick = { open = false; onSync() }
+            )
+            DropdownMenuItem(
+                text = { Text("Contexts") },
+                leadingIcon = { Icon(Icons.Rounded.Place, null, tint = Fresh.Indigo) },
+                onClick = { open = false; onOpenContexts() }
             )
             DropdownMenuItem(
                 text = { Text("Fingerprint lock") },
@@ -1542,7 +1599,8 @@ private fun DayPageList(
     vm: MainVM,
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit,
-    onReplace: (Item) -> Unit
+    onReplace: (Item) -> Unit,
+    onOpenContext: (String) -> Unit
 ) {
     // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
@@ -1573,6 +1631,13 @@ private fun DayPageList(
                         section.label, upcoming.size, group,
                         Modifier.animateItem().clickable(onClick = onToggleUpcoming),
                         trailing = if (showUpcoming) "Hide" else "Show"
+                    )
+                } else if (group == Group.CONTEXT && section.key != "done-header") {
+                    // Grouped by context, a header opens that context's page (open and done actions).
+                    GroupHeader(
+                        section.label, section.items.size, group,
+                        Modifier.animateItem().clickable(onClickLabel = "Open ${section.label}") { onOpenContext(section.label) },
+                        trailing = "Open"
                     )
                 } else {
                     GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
@@ -1773,7 +1838,7 @@ private fun ActionRow(
             Column(Modifier.weight(1f)) {
                 if (god) {
                     Text(
-                        "$GOD_LAMP  GOD TASK",
+                        GodTasks.themeOf(item)?.let { "$GOD_LAMP  GOD TASK  ·  ${it.label.uppercase()}" } ?: "$GOD_LAMP  GOD TASK",
                         style = MaterialTheme.typography.labelSmall,
                         color = Fresh.Gold
                     )
@@ -2220,6 +2285,239 @@ private fun PickerPill(
                     trailingIcon = { if (i == selected) Icon(Icons.Rounded.Check, null, tint = Fresh.Teal) }
                 )
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Context pages
+
+/**
+ * ⋮ → Contexts: every context with its open and done counts, busiest first. Tap one for its page;
+ * type a new name in the dock to start a context that has no actions yet.
+ */
+@Composable
+private fun ContextsScreen(
+    actions: List<Item>,
+    onOpen: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    val summaries = remember(actions) { contextSummaries(actions) }
+    ContextFrame(
+        caption = "${summaries.size} contexts",
+        title = "Contexts",
+        onBack = onBack,
+        dock = { NewContextBar(onOpen) }
+    ) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (summaries.isEmpty()) {
+                item(key = "empty") {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("No contexts yet", style = MaterialTheme.typography.headlineMedium)
+                        Text("Type one below to start its page.", style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
+                    }
+                }
+            }
+            items(summaries, key = { it.name.lowercase() }) { s ->
+                Row(
+                    Modifier.fillMaxWidth().animateItem().glass(ROW_SHAPE, strong = true)
+                        .clickable(onClickLabel = "Open ${s.name}") { onOpen(s.name) }
+                        .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(36.dp).clip(CircleShape).background(Fresh.Indigo.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(contextIcon(s.name), null, tint = Fresh.Indigo, modifier = Modifier.size(20.dp)) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(s.name, style = MaterialTheme.typography.titleSmall, color = Fresh.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            "${s.open} open  ·  ${s.done} done",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (s.open > 0) Fresh.Indigo else Fresh.TextDim
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Fresh.TextDim)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One context's page: its open actions by due date (repeats beyond a week folded under Upcoming),
+ * then everything done in it, newest first. The type bar and `+` file new actions under this
+ * context; they also show on Now, Near or Next by due date like any other.
+ */
+@Composable
+private fun ContextScreen(
+    name: String,
+    actions: List<Item>,
+    showUpcoming: Boolean,
+    onToggleUpcoming: () -> Unit,
+    vm: MainVM,
+    onEdit: (Item) -> Unit,
+    onDelete: (Item) -> Unit,
+    onReplace: (Item) -> Unit,
+    onBack: () -> Unit,
+    snackbar: SnackbarHostState,
+    bar: @Composable (Modifier) -> Unit
+) {
+    val mine = remember(actions, name) { actions.inContext(name) }
+    val (upcoming, sections) = remember(mine, showUpcoming) {
+        val (folded, built) = buildSections(mine, Group.DATE, showUpcoming)
+        folded to built.map { s ->
+            if (s.key == "done-header") s.copy(items = s.items.sortedByDescending { it.completedAt ?: 0L }) else s
+        }
+    }
+    val open = mine.count { it.status == STATUS_OPEN }
+    ContextFrame(
+        caption = "Context  ·  $open open  ·  ${mine.size - open} done",
+        title = name,
+        onBack = onBack,
+        dock = bar
+    ) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (sections.isEmpty()) {
+                item(key = "empty") {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Nothing in $name yet", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+                        Text(
+                            "Type a task below. It is filed under $name and shows on Now, Near or Next by its due date.",
+                            style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim, textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+            sections.forEach { section ->
+                item(key = section.key) {
+                    if (section.key == UPCOMING_KEY) {
+                        GroupHeader(
+                            section.label, upcoming.size, Group.DATE,
+                            Modifier.animateItem().clickable(onClick = onToggleUpcoming),
+                            trailing = if (showUpcoming) "Hide" else "Show"
+                        )
+                    } else {
+                        GroupHeader(section.label, section.items.size, Group.DATE, Modifier.animateItem())
+                    }
+                }
+                items(section.items, key = { it.id }) { item ->
+                    if (ThoughtTasks.isThought(item)) {
+                        ThoughtRow(
+                            item,
+                            onToggle = { vm.toggleDone(item) },
+                            onEdit = { onEdit(item) },
+                            onDelete = { onDelete(item) },
+                            modifier = Modifier.animateItem()
+                        )
+                    } else {
+                        // Grouped by date already and all one context, so rows name the person and due day.
+                        ActionRow(
+                            item, Group.CONTEXT,
+                            onToggle = { vm.toggleDone(item) },
+                            onEdit = { onEdit(item) },
+                            onDelete = { onDelete(item) },
+                            onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
+                            modifier = Modifier.animateItem()
+                        )
+                    }
+                }
+            }
+        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
+    }
+}
+
+/** The context screens keep the app's three zones: a page header with Back, the sunken list, a dock. */
+@Composable
+private fun ContextFrame(
+    caption: String,
+    title: String,
+    onBack: () -> Unit,
+    dock: @Composable (Modifier) -> Unit,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize()
+            .background(Fresh.Recess)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+    ) {
+        Box(
+            Modifier.fillMaxWidth().zIndex(1f).panel(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                Modifier.fillMaxWidth().widthIn(max = 720.dp).height(56.dp).padding(start = 12.dp, end = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                GlassIconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Back", tint = Fresh.Text)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(caption.uppercase(), style = MaterialTheme.typography.labelSmall, color = Fresh.TextDim, maxLines = 1)
+                    Text(title, style = MaterialTheme.typography.titleLarge, color = Fresh.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth(), content = content)
+        Box(
+            Modifier.fillMaxWidth()
+                .zIndex(1f)
+                .panel(DOCK_SHAPE)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp)
+        ) { dock(Modifier.fillMaxWidth()) }
+    }
+}
+
+/** The Contexts list's dock: type a context name to open its (empty) page and add the first action. */
+@Composable
+private fun NewContextBar(onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
+    var text by rememberSaveable { mutableStateOf("") }
+    val submit = {
+        if (text.isNotBlank()) { onOpen(text.trim()); text = "" }
+    }
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 50.dp).well(RoundedCornerShape(18.dp))
+            .padding(start = 16.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = Fresh.Text),
+            cursorBrush = SolidColor(Fresh.Indigo),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { submit() }),
+            modifier = Modifier.weight(1f).semantics { contentDescription = "New context" },
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (text.isEmpty()) {
+                        Text("New context…", style = MaterialTheme.typography.bodyLarge, color = Fresh.TextDim.copy(alpha = 0.7f), maxLines = 1)
+                    }
+                    inner()
+                }
+            }
+        )
+        Spacer(Modifier.width(4.dp))
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(14.dp))
+                .background(if (text.isNotBlank()) Fresh.accent else Brush.linearGradient(listOf(Fresh.Rim, Fresh.Rim)))
+                .clickable(enabled = text.isNotBlank(), onClickLabel = "Open context") { submit() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Open context", tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }
