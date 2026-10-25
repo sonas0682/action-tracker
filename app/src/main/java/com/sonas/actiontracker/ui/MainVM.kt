@@ -39,7 +39,7 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     val suggested = dao.suggested().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val actions = dao.actions().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** ⋮ → Thought of the day: off hides thought rows from the lists. */
+    /** ⋮ → Settings → Thought of the day: off hides thought rows from the lists. */
     var showThought by mutableStateOf(ThoughtTasks.enabled(app))
         private set
 
@@ -71,13 +71,13 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         if (runCatching { ThoughtTasks.ensureToday(getApplication()) }.getOrDefault(false)) afterWrite()
     }
 
-    /** ⋮ → Thought of the day: on adds today's at once; off removes the unread one. */
+    /** ⋮ → Settings → Thought of the day: on adds today's at once; off removes the unread one. */
     fun setShowThought(on: Boolean) = viewModelScope.launch {
         showThought = on
         if (runCatching { ThoughtTasks.setEnabled(getApplication(), on) }.getOrDefault(false)) afterWrite()
     }
 
-    /** Saves the ⋮ → God task theme; turning it on adds today's right away (after 6 AM). */
+    /** Saves the ⋮ → Settings → God task theme; turning it on adds today's right away (after 6 AM). */
     /** Saves the Light / Dark / System choice; the app recolours at once, the widget on its redraw. */
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
         ThemePref.set(getApplication(), mode)
@@ -89,7 +89,7 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         addGodTasks()
     }
 
-    /** Saves the ⋮ → God task counts and applies today's at once (adds more, or clears them at 0). */
+    /** Saves the ⋮ → Settings → God task counts and applies today's at once (adds more, or clears them at 0). */
     fun setGodCounts(weekday: Int, weekend: Int) = viewModelScope.launch {
         GodTasks.setCounts(getApplication(), weekday, weekend)
         if (runCatching { GodTasks.ensureToday(getApplication(), force = true) }.getOrDefault(false)) afterWrite()
@@ -259,7 +259,7 @@ class MainVM(app: Application) : AndroidViewModel(app) {
             message = if (declined.isEmpty()) result
             else "$result. ${declined.joinToString(" and ")} not allowed, so " +
                 (if (declined.size == 2) "suggestions are" else "its suggestions are") +
-                " off. Turn back on under ⋮ → Permissions & features."
+                " off. Turn back on under ⋮ → Settings → Permissions & features."
             syncing = false
             // Nano passes are best effort: a failure keeps the rule-based titles and retries next time.
             runCatching { SmartTitles.run(getApplication()) }

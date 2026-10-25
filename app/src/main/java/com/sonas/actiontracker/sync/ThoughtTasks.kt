@@ -20,7 +20,7 @@ const val THOUGHT_MARK = "✦"
 /**
  * Thought of the day as a task: one quote a day from [Thoughts], added to today's Morning on an
  * aurora quote card. Ticking it done means it was read. Yesterday's unread thought isn't carried
- * over: today's replaces it. ⋮ → Thought of the day turns it on (the default) or off; off removes
+ * over: today's replaces it. ⋮ → Settings → Thought of the day turns it on (the default) or off; off removes
  * the open one and hides thought rows from the lists.
  */
 object ThoughtTasks {

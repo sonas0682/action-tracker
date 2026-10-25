@@ -10,7 +10,7 @@ paths:
 App
 - "Fresh" theme (`ui/Theme.kt`): off-white canvas, white glass cards, indigo/sky/teal
   accents; not a traditional Material look. A dark variant (deep ink canvas, slate cards, brighter
-  accents) is chosen in ⋮ → Theme: System default (the default), Light or Dark, saved in the "ui"
+  accents) is chosen in ⋮ → Settings → Theme: System default (the default), Light or Dark, saved in the "ui"
   prefs as `ThemePref` (added 2026-10-21 at Sona's request). Every `Fresh` colour has a light and
   a dark shade: add new colours there with both, never as a raw `Color(0x…)` in a screen, or they
   stay light in dark mode. "White" below means `Fresh.GlassStrong` (slate in dark mode).
@@ -43,6 +43,13 @@ App
   open actions by date, then Upcoming and all Done (newest first), with a type bar that files new
   actions under that context. Same three zones; the header has a Back button. Tapping a Context
   group header on a day page opens that page too. Back returns to the list, then home.
+- Menu (reshaped 2026-10-25 at Sona's request, "congested, alignment and order not proper"): the ⋮
+  menu has only Sync now, Contexts, a divider, then Settings. Settings is a full-screen page (same
+  frame as Contexts, Back in the header, no dock) with captioned white cards: Daily (Reminders,
+  God task, Thought of the day switch), Look (Theme as a System / Light / Dark segmented pill) and
+  Privacy & data (Fingerprint lock switch, Google Drive backup, Permissions & features), version
+  last. Every row has an icon on the same tinted circle and a one-line state summary under its
+  title. New once-set options go into a Settings section, not the ⋮ menu.
 - Calendar's day list is one list (no time-of-day sub-headers), each row with its time-of-day icon
   on the right.
 - Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the

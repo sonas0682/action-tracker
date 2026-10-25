@@ -67,7 +67,7 @@ class MainActivity : FragmentActivity() {
                     val declined = GoogleAuth.recordGrant(this, r.grantedScopes)
                     val token = r.accessToken
                     if (token != null && r.grantedScopes.isNotEmpty()) vm.sync(token, r.grantedScopes, declined)
-                    else vm.message = "Gmail and Calendar weren't allowed, so there are no suggestions. Turn them on under ⋮ → Permissions & features."
+                    else vm.message = "Gmail and Calendar weren't allowed, so there are no suggestions. Turn them on under ⋮ → Settings → Permissions & features."
                 }
                 .onFailure { vm.message = "Google sign-in cancelled" }
         }
@@ -249,7 +249,7 @@ class MainActivity : FragmentActivity() {
                 .onSuccess { r ->
                     val pending = r?.pendingIntent
                     when {
-                        r == null -> vm.message = "Gmail and Calendar are both off. Turn one on under ⋮ → Permissions & features."
+                        r == null -> vm.message = "Gmail and Calendar are both off. Turn one on under ⋮ → Settings → Permissions & features."
                         r.hasResolution() && pending != null ->
                             authLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
                         else -> r.accessToken?.let { vm.sync(it, r.grantedScopes) }
@@ -261,7 +261,7 @@ class MainActivity : FragmentActivity() {
 
     /**
      * Right after a fresh install (or on a new phone) the database is empty and backup
-     * is off: offer once to look for a Google Drive backup. The ⋮ menu has it after that.
+     * is off: offer once to look for a Google Drive backup. ⋮ → Settings has it after that.
      */
     private fun offerRestoreOnFreshInstall(prefs: android.content.SharedPreferences) {
         if (prefs.getBoolean("restore_offered", false) || Backup.status(this).enabled) return

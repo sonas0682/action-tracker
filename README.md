@@ -25,7 +25,7 @@ another app. Your tasks are stored encrypted on your phone.
 
 The app asks for each permission only when a feature needs it. If you say no, the rest of the
 app keeps working. You can see what is on, off or in basic mode at any time under
-**⋮ → Permissions & features**, and the **Fix** button there takes you to the right setting.
+**⋮ → Settings → Permissions & features**, and the **Fix** button there takes you to the right setting.
 
 | Permission | What it is used for | If you don't allow it |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ app keeps working. You can see what is on, off or in basic mode at any time unde
 Voice capture also needs a speech recognition service on the phone (Google's is built into
 most phones). If the phone has none, the Permissions & features screen says so.
 
-The fingerprint lock (⋮ menu, off by default) needs a fingerprint, face or PIN set up in Android
+The fingerprint lock (⋮ → Settings, off by default) needs a fingerprint, face or PIN set up in Android
 settings. If none is set up, the app tells you instead of turning the lock on.
 
 ## Google account access
@@ -50,9 +50,9 @@ consent screen. The app then switches that source off and keeps using the others
 | --- | --- | --- | --- |
 | Gmail (read only) | You tap Sync the first time | Suggests tasks from emails of the last 2 days (not promotions or social) | No email suggestions. Calendar still works. |
 | Google Calendar (read only) | You tap Sync the first time | Suggests tasks from events in the next 7 days | No calendar suggestions. Gmail still works. |
-| Google Drive (app folder only) | You turn on ⋮ → Google Drive backup | An encrypted backup in a hidden app folder; the app can't see your other Drive files | No backup. Your tasks live only on this phone. |
+| Google Drive (app folder only) | You turn on ⋮ → Settings → Google Drive backup | An encrypted backup in a hidden app folder; the app can't see your other Drive files | No backup. Your tasks live only on this phone. |
 
-You can switch Gmail and Calendar on or off at any time under ⋮ → Permissions & features.
+You can switch Gmail and Calendar on or off at any time under ⋮ → Settings → Permissions & features.
 Switching them off stops the app using them. To remove access completely, go to your Google
 Account → Security → Third-party apps.
 
@@ -80,6 +80,10 @@ Nano only runs while the app is open, and only on phones that support it.
   tap is in two rows at the bottom: group-by (or "All N" on Suggested), the type bar and the ⋮ menu
   (with Sync now); then the Now | Near | Next | Suggested | Calendar | Stats tabs. Lists read
   top to bottom (Morning, Afternoon, Evening, Night), starting under the top bar.
+- **Menu and Settings**: the ⋮ menu is short: Sync now, Contexts, then Settings. Settings is one
+  page in three sections, each row showing its current state: **Daily** (Reminders, God task,
+  Thought of the day), **Look** (Theme: System, Light or Dark in one tap) and **Privacy & data**
+  (Fingerprint lock, Google Drive backup, Permissions & features), with the app version at the end.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.
@@ -100,10 +104,10 @@ Nano only runs while the app is open, and only on phones that support it.
   the day in one "Thought of the day" context, so each has its own page; older ones move on update.
 - **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
   one off queues the next.
-- **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what
+- **Reminders** (⋮ → Settings → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what
   is due. Each reminder is one notification with Snooze 30 min (and Done when it lists one task).
   Notifications also show on a paired watch.
-- **God task** (⋮ → God task): every morning at 6 AM a short task (under 15 minutes) lands in
+- **God task** (⋮ → Settings → God task): every morning at 6 AM a short task (under 15 minutes) lands in
   today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends by default
   (set each from None to 5 in the same dialog; None shows no God tasks that day and clears any
   unfinished ones). Themes are
@@ -112,7 +116,7 @@ Nano only runs while the app is open, and only on phones that support it.
   Long-press one for **Another God task** (same theme, Undo brings the old one back). One left
   undone moves to the next day and counts toward that day's number.
   Tasks come from a built-in list of 30 per theme and don't repeat within 60 days.
-- **Thought of the day** (⋮ → Thought of the day, on by default): each day one quote becomes a
+- **Thought of the day** (⋮ → Settings → Thought of the day, on by default): each day one quote becomes a
   task in today's Morning, on a small quote card (soft indigo-to-teal wash, faint quote mark), from
   the Stoics, the Bhagavad Gita, the Thirukkural, Rumi or Peter Drucker. Tick it once you've read it
   and the task is done. An unread one doesn't pile up: the next day's thought replaces it. Turning
@@ -122,7 +126,7 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Photo to task**: tap +, then the camera icon, or share a photo or screenshot to the app.
   The text is read on the phone; the photo is never stored or uploaded.
 - **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
-- **Theme** (⋮ → Theme): System default (follows Android's dark mode), Light or Dark. The widget
+- **Theme** (⋮ → Settings → Theme): System default (follows Android's dark mode), Light or Dark. The widget
   follows the same choice.
 - **Home-screen widget**: Now (today) and Near (tomorrow) tabs; tick tasks off from the home screen. Task
   titles are visible there even when the app lock is on.
