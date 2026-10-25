@@ -21,10 +21,11 @@ const val SOURCE_GOD = "GOD"
 const val GOD_LAMP = "\uD83E\uDE94"
 
 /**
- * God tasks: one short activity each weekday and three on Saturday and Sunday, added to today's
- * Evening every morning from [START_TIME]. The theme comes from ⋮ → God task (Random by default,
- * weekends included). An unfinished God task isn't left overdue: it moves to today and counts
- * toward today's number, so new ones only fill the gap.
+ * God tasks: short activities added to today's Evening every morning from [START_TIME], one each
+ * weekday and three on Saturday and Sunday unless ⋮ → God task sets other counts (0 to [MAX_COUNT]).
+ * The theme comes from the same dialog (Random by default, weekends included). An unfinished God
+ * task isn't left overdue: it moves to today and counts toward today's number, so new ones only
+ * fill the gap. On a day whose count is 0, unfinished God tasks are removed instead, so none show.
  *
  * Tasks are picked from [GodTheme.tasks] (Gemini Nano can't write them: the Prompt API doesn't
  * support the S25 Ultra and Nano can't run in the background). A task isn't picked again for
@@ -40,6 +41,10 @@ object GodTasks {
     /** History older than this is dropped; it no longer changes any pick. */
     private const val KEEP_DAYS = 365L
     val FAMILY = listOf("Nathiya", "Vibu", "Dharshu")
+    const val WEEKDAY_DEFAULT = 1
+    const val WEEKEND_DEFAULT = 3
+    /** Random gives each of a day's tasks its own theme, so there are at most as many as themes. */
+    val MAX_COUNT = GodTheme.entries.size
 
     private val lock = Mutex()
 
@@ -55,6 +60,20 @@ object GodTasks {
 
     fun enabled(context: Context): Boolean = choice(context) != OFF
 
+    fun weekdayCount(context: Context): Int =
+        prefs(context).getInt("weekday_count", WEEKDAY_DEFAULT).coerceIn(0, MAX_COUNT)
+
+    fun weekendCount(context: Context): Int =
+        prefs(context).getInt("weekend_count", WEEKEND_DEFAULT).coerceIn(0, MAX_COUNT)
+
+    /** Saves the ⋮ → God task counts; the caller runs [ensureToday] with force so today follows at once. */
+    fun setCounts(context: Context, weekday: Int, weekend: Int) {
+        prefs(context).edit()
+            .putInt("weekday_count", weekday.coerceIn(0, MAX_COUNT))
+            .putInt("weekend_count", weekend.coerceIn(0, MAX_COUNT))
+            .apply()
+    }
+
     fun choiceLabel(choice: String): String = when (choice) {
         RANDOM -> "Random"
         OFF -> "Off"
@@ -65,23 +84,33 @@ object GodTasks {
 
     /**
      * Once a day, at or after [START_TIME]: moves unfinished God tasks to today and adds new ones
-     * up to today's count. Returns true when it changed anything. Safe to call often.
+     * up to today's count; when today's count is 0 it removes unfinished ones instead. Returns true
+     * when it changed anything. Safe to call often; [force] runs it again today after a count change.
      */
-    suspend fun ensureToday(context: Context, now: LocalDateTime = LocalDateTime.now()): Boolean = lock.withLock {
+    suspend fun ensureToday(
+        context: Context, now: LocalDateTime = LocalDateTime.now(), force: Boolean = false
+    ): Boolean = lock.withLock {
         if (!enabled(context) || now.toLocalTime() < START_TIME) return@withLock false
         val today = now.toLocalDate()
         val t = today.toEpochDay()
         val prefs = prefs(context)
-        if (prefs.getLong("last_day", Long.MIN_VALUE) == t) return@withLock false
+        if (!force && prefs.getLong("last_day", Long.MIN_VALUE) == t) return@withLock false
+        val count = countFor(today, weekdayCount(context), weekendCount(context))
 
         val history = parseHistory(prefs.getStringSet("history", emptySet()).orEmpty())
         val familyNext = prefs.getInt("family_next", 0)
         val db = Db.get(context)
         val (carried, picks) = db.withTransaction {
             val dao = db.dao()
+            if (count == 0) {
+                // A day set to 0 shows no God tasks: unfinished ones (carried or added earlier today) go.
+                val unfinished = dao.openGodBefore(t + 1)
+                unfinished.forEach { dao.delete(it) }
+                return@withTransaction unfinished.size to emptyList<Pick>()
+            }
             val late = dao.openGodBefore(t)
             late.forEach { dao.update(it.copy(dueDate = t)) }
-            val picks = plan(today, choice(context), dao.godCountOn(t), history, familyNext, Random.Default)
+            val picks = plan(today, choice(context), dao.godCountOn(t), history, familyNext, Random.Default, count)
             picks.forEach { dao.insert(it.toItem(t)) }
             late.size to picks
         }
@@ -141,18 +170,19 @@ object GodTasks {
 
     fun key(theme: GodTheme, index: Int) = "${theme.name}:$index"
 
-    /** One on weekdays, three on Saturday and Sunday. */
-    fun countFor(day: LocalDate): Int =
-        if (day.dayOfWeek == DayOfWeek.SATURDAY || day.dayOfWeek == DayOfWeek.SUNDAY) 3 else 1
+    /** [weekday] on Monday to Friday, [weekend] on Saturday and Sunday (1 and 3 unless changed). */
+    fun countFor(day: LocalDate, weekday: Int = WEEKDAY_DEFAULT, weekend: Int = WEEKEND_DEFAULT): Int =
+        if (day.dayOfWeek == DayOfWeek.SATURDAY || day.dayOfWeek == DayOfWeek.SUNDAY) weekend else weekday
 
     /**
-     * The new God tasks for [day] when [already] are on it (carried over or added earlier).
-     * [history] maps [key] to the epoch day it was last picked; [familyNext] is the rotation position.
+     * The new God tasks for [day] when [already] are on it (carried over or added earlier), up to
+     * [count]. [history] maps [key] to the epoch day it was last picked; [familyNext] is the rotation position.
      */
     fun plan(
-        day: LocalDate, choice: String, already: Int, history: Map<String, Long>, familyNext: Int, random: Random
+        day: LocalDate, choice: String, already: Int, history: Map<String, Long>, familyNext: Int, random: Random,
+        count: Int = countFor(day)
     ): List<Pick> {
-        val n = countFor(day) - already
+        val n = count.coerceAtMost(MAX_COUNT) - already
         if (n <= 0 || choice == OFF) return emptyList()
         val fixed = GodTheme.of(choice)
         // Random spreads a weekend's three over different themes.

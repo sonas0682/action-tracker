@@ -97,7 +97,9 @@ Nano only runs while the app is open, and only on phones that support it.
   is due. Each reminder is one notification with Snooze 30 min (and Done when it lists one task).
   Notifications also show on a paired watch.
 - **God task** (⋮ → God task): every morning at 6 AM a short task (under 15 minutes) lands in
-  today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends. Themes are
+  today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends by default
+  (set each from None to 5 in the same dialog; None shows no God tasks that day and clears any
+  unfinished ones). Themes are
   Gratitude, Leadership, Networking, Health and Family (Family tasks rotate Nathiya, Vibu and
   Dharshu); pick one or leave it on Random (the default; also used on weekends), or turn it Off.
   Long-press one for **Another God task** (same theme, Undo brings the old one back). One left

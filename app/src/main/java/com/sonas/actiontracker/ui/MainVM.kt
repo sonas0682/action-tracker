@@ -79,6 +79,12 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         addGodTasks()
     }
 
+    /** Saves the ⋮ → God task counts and applies today's at once (adds more, or clears them at 0). */
+    fun setGodCounts(weekday: Int, weekend: Int) = viewModelScope.launch {
+        GodTasks.setCounts(getApplication(), weekday, weekend)
+        if (runCatching { GodTasks.ensureToday(getApplication(), force = true) }.getOrDefault(false)) afterWrite()
+    }
+
     /** Long-press "Another God task": swaps it for a new one from the same theme. Returns the new row. */
     suspend fun replaceGodTask(item: Item): Item? =
         GodTasks.replace(getApplication(), item).also { if (it != null) afterWrite() }
