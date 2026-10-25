@@ -2,12 +2,13 @@ package com.sonas.actiontracker.data
 
 import kotlin.random.Random
 
-/** One short line for the bottom of Now, and who said it. */
+/** One short quote for the daily Thought of the day task, and who said it. */
 data class Thought(val text: String, val source: String)
 
 /**
- * Thought of the day: a new line on every app launch, from the Stoics, the Bhagavad Gita, the
- * Thirukkural, Rumi and Peter Drucker (English renderings; translations vary).
+ * Thought of the day: one line a day, added as a task by [com.sonas.actiontracker.sync.ThoughtTasks],
+ * from the Stoics, the Bhagavad Gita, the Thirukkural, Rumi and Peter Drucker (English renderings;
+ * translations vary).
  */
 object Thoughts {
     val all: List<Thought> = listOf(
@@ -49,7 +50,7 @@ object Thoughts {
         Thought("Follow effective action with quiet reflection; it brings even more effective action.", "Peter Drucker")
     )
 
-    /** Index of a random thought other than [last], so two launches in a row never repeat. */
+    /** Index of a random thought other than [last], so two days in a row never repeat. */
     fun next(last: Int, random: Random = Random.Default): Int {
         if (last !in all.indices) return random.nextInt(all.size)
         val i = random.nextInt(all.size - 1)

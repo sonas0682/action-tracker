@@ -58,7 +58,7 @@ data class Item(
     /** Due date as epoch day (LocalDate.toEpochDay). */
     val dueDate: Long,
     val status: String,
-    /** GMAIL, CALENDAR, CUSTOM, VOICE, PHOTO, SHARE or GOD (a daily God task). */
+    /** GMAIL, CALENDAR, CUSTOM, VOICE, PHOTO, SHARE, GOD (a daily God task) or THOUGHT (the Thought of the day). */
     val source: String,
     val createdAt: Long = System.currentTimeMillis(),
     /**
@@ -136,6 +136,18 @@ interface ItemDao {
     /** God tasks on [epochDay], open or done; they count toward the day's number. */
     @Query("SELECT COUNT(*) FROM items WHERE source = 'GOD' AND dueDate = :epochDay AND status IN ('OPEN', 'DONE')")
     suspend fun godCountOn(epochDay: Long): Int
+
+    /** Unread Thoughts of the day from before [epochDay]; today's replaces them. */
+    @Query("DELETE FROM items WHERE source = 'THOUGHT' AND status = 'OPEN' AND dueDate < :epochDay")
+    suspend fun deleteOpenThoughtsBefore(epochDay: Long): Int
+
+    /** Every unread Thought of the day (when the feature is switched off). */
+    @Query("DELETE FROM items WHERE source = 'THOUGHT' AND status = 'OPEN'")
+    suspend fun deleteOpenThoughts(): Int
+
+    /** Thought rows on [epochDay] in any state; a deleted one leaves none, but the day is already recorded. */
+    @Query("SELECT COUNT(*) FROM items WHERE source = 'THOUGHT' AND dueDate = :epochDay")
+    suspend fun thoughtCountOn(epochDay: Long): Int
 
     @Query("SELECT DISTINCT seriesId FROM items WHERE seriesId IS NOT NULL")
     suspend fun seriesIds(): List<Long>

@@ -45,14 +45,14 @@ object Reminders {
 
     /**
      * Starts or stops the periodic check to match the saved settings. Safe to call on every launch.
-     * The check also backs up the time-of-day reminders and adds the morning's God tasks, so it
-     * runs while any of them is on.
+     * The check also backs up the time-of-day reminders and adds the morning's God tasks and
+     * Thought of the day, so it runs while any of them is on.
      */
     fun schedule(context: Context) {
         // Builds before the fixed 8 AM digest saved a custom reminder time here.
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("hour").remove("minute").apply()
         val wm = WorkManager.getInstance(context)
-        if (!enabled(context) && !SlotReminders.anyEnabled(context) && !GodTasks.enabled(context)) {
+        if (!enabled(context) && !SlotReminders.anyEnabled(context) && !GodTasks.enabled(context) && !ThoughtTasks.enabled(context)) {
             wm.cancelUniqueWork(WORK)
             return
         }
@@ -98,8 +98,10 @@ object Reminders {
 
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        // God tasks first, so the 8 AM digest lists them.
-        if (runCatching { GodTasks.ensureToday(applicationContext) }.getOrDefault(false)) {
+        // God tasks and the Thought of the day first, so the 8 AM digest lists them.
+        val god = runCatching { GodTasks.ensureToday(applicationContext) }.getOrDefault(false)
+        val thought = runCatching { ThoughtTasks.ensureToday(applicationContext) }.getOrDefault(false)
+        if (god || thought) {
             runCatching { DueWidget.refresh(applicationContext) }
             runCatching { Backup.backUpSoon(applicationContext) }
         }

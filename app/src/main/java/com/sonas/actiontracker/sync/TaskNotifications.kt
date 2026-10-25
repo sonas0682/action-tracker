@@ -59,7 +59,11 @@ object TaskNotifications {
     fun line(item: Item, todayEpoch: Long): String {
         val who = if (item.person != "Me") " · ${item.person}" else ""
         val late = if (item.dueDate < todayEpoch) "Overdue: " else ""
-        val lamp = if (GodTasks.isGod(item)) "$GOD_LAMP " else ""
+        val lamp = when {
+            GodTasks.isGod(item) -> "$GOD_LAMP "
+            ThoughtTasks.isThought(item) -> "$THOUGHT_MARK "
+            else -> ""
+        }
         return "$late$lamp${item.title}$who"
     }
 

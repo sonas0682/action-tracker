@@ -58,6 +58,8 @@ import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.Backup
 import com.sonas.actiontracker.sync.GOD_LAMP
+import com.sonas.actiontracker.sync.THOUGHT_MARK
+import com.sonas.actiontracker.sync.ThoughtTasks
 import com.sonas.actiontracker.sync.GodTasks
 import com.sonas.actiontracker.ui.ThemeMode
 import com.sonas.actiontracker.ui.ThemePref
@@ -324,7 +326,11 @@ private fun ActionCard(item: Item, epochDay: Long, accent: Shade) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (god) "$GOD_LAMP ${item.title}" else item.title, maxLines = 1,
+                    when {
+                        god -> "$GOD_LAMP ${item.title}"
+                        ThoughtTasks.isThought(item) -> "$THOUGHT_MARK ${item.title}"
+                        else -> item.title
+                    }, maxLines = 1,
                     modifier = GlanceModifier.defaultWeight(),
                     style = TextStyle(color = c(W.Text), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 )
