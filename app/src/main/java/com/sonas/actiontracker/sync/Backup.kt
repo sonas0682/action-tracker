@@ -196,6 +196,7 @@ object Backup {
                         i.seriesStart?.let { put("seriesStart", it) }
                         i.endDate?.let { put("endDate", it) }
                         i.endCount?.let { put("endCount", it) }
+                        i.sourceRef?.let { put("sourceRef", it) }
                     }
             )
         }
@@ -259,7 +260,8 @@ object Backup {
             seriesId = o.optLongOrNull("seriesId"),
             seriesStart = o.optLongOrNull("seriesStart"),
             endDate = o.optLongOrNull("endDate"),
-            endCount = o.optLongOrNull("endCount")?.toInt()
+            endCount = o.optLongOrNull("endCount")?.toInt(),
+            sourceRef = o.optString("sourceRef").ifEmpty { null }
         )
     }
 

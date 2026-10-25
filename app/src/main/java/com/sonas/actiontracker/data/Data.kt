@@ -81,7 +81,9 @@ data class Item(
     /** Last day an occurrence may fall on (epoch day): "Ends on" directly, or worked out from "Ends after N times". */
     val endDate: Long? = null,
     /** "Ends after N times" (the first occurrence counts); null for "Never" or "On a date". */
-    val endCount: Int? = null
+    val endCount: Int? = null,
+    /** Gmail message id of a GMAIL suggestion, so tapping it opens the email; null for other sources and mail synced before v7. */
+    val sourceRef: String? = null
 ) {
     companion object {
         fun blank() = Item(
@@ -191,7 +193,7 @@ interface ItemDao {
 }
 
 /** Room schema version; also written into Drive backups so restores know where they came from. */
-const val DB_VERSION = 6
+const val DB_VERSION = 7
 
 @Database(entities = [Item::class, Processed::class], version = DB_VERSION, exportSchema = false)
 abstract class Db : RoomDatabase() {
@@ -229,7 +231,7 @@ abstract class Db : RoomDatabase() {
 
         /** Every upgrade step, oldest first; also used by the upgrade tests. */
         internal val MIGRATIONS: Array<Migration> by lazy {
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         }
 
         /** Adds the time of day, backfilled with the same work-context rule new actions use. */
@@ -261,6 +263,13 @@ abstract class Db : RoomDatabase() {
                 db.execSQL("ALTER TABLE items ADD COLUMN endCount INTEGER")
                 db.execSQL("UPDATE items SET seriesId = id, seriesStart = dueDate WHERE recurrence != 'NONE' AND status = 'OPEN'")
                 db.execSQL("UPDATE items SET recurrence = 'NONE' WHERE recurrence != 'NONE' AND seriesId IS NULL AND status = 'DONE'")
+            }
+        }
+
+        /** Adds the Gmail message id; existing suggestions keep null and open the Gmail app's inbox instead. */
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN sourceRef TEXT")
             }
         }
 

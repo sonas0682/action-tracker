@@ -1,6 +1,9 @@
 package com.sonas.actiontracker.sync
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
@@ -179,6 +182,38 @@ object Calendar {
                 }
                 CalEvent(e.getString("id"), e.optString("summary"), e.optString("description"), date)
             }.getOrNull()
+        }
+    }
+}
+
+/** Opens a suggested email where Sona reads mail: the Gmail app first, Gmail on the web if the app is missing. */
+object GmailLink {
+    const val GMAIL_PACKAGE = "com.google.android.gm"
+
+    /** Web address of one message by its API id (the same hex id Gmail's web URLs use). */
+    fun webUrl(messageId: String): String =
+        "https://mail.google.com/mail/u/0/#all/" + URLEncoder.encode(messageId, "UTF-8")
+
+    /**
+     * The message in the Gmail app (which handles mail.google.com links), else in the browser.
+     * With no id (mail synced before the id was kept) it opens the Gmail app, or the web inbox.
+     * Returns false when nothing on the phone could open it.
+     */
+    fun open(context: Context, messageId: String?): Boolean {
+        val url = messageId?.takeIf { it.isNotBlank() }?.let(::webUrl) ?: "https://mail.google.com/mail/u/0/"
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val attempts = buildList {
+            add(Intent(view).setPackage(GMAIL_PACKAGE))
+            if (messageId.isNullOrBlank()) context.packageManager.getLaunchIntentForPackage(GMAIL_PACKAGE)?.let(::add)
+            add(view)
+        }
+        return attempts.any { intent ->
+            try {
+                context.startActivity(intent)
+                true
+            } catch (_: ActivityNotFoundException) {
+                false
+            }
         }
     }
 }
