@@ -187,7 +187,6 @@ import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.SeriesScope
 import com.sonas.actiontracker.data.Snapshot
-import com.sonas.actiontracker.data.Thought
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
@@ -196,6 +195,8 @@ import com.sonas.actiontracker.sync.GmailLink
 import com.sonas.actiontracker.sync.GodTasks
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SlotReminders
+import com.sonas.actiontracker.sync.THOUGHT_MARK
+import com.sonas.actiontracker.sync.ThoughtTasks
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlinx.coroutines.launch
@@ -431,7 +432,12 @@ fun AppScreen(
         }
     }
     vm.message?.let { lastMessage = it }
-    val dayPages = remember(actions, today()) { DayPage.entries.map { actions.onPage(it, today()) } }
+    // ⋮ → Thought of the day off also hides thought rows already read today.
+    val showThought = vm.showThought
+    val dayPages = remember(actions, today(), showThought) {
+        val shown = if (showThought) actions else actions.filterNot { ThoughtTasks.isThought(it) }
+        DayPage.entries.map { shown.onPage(it, today()) }
+    }
     val tabCounts = remember(dayPages, suggested) {
         dayPages.map { list -> list.count { it.status == STATUS_OPEN && !it.isUpcomingRepeat() } } + suggested.size
     }
@@ -529,6 +535,8 @@ fun AppScreen(
                         lockEnabled, onLockChange,
                         onOpenSlotReminders = { slotReminders = true },
                         onOpenGodTask = { godTask = true },
+                        showThought = showThought,
+                        onShowThought = vm::setShowThought,
                         onOpenTheme = { theme = true },
                         onOpenPermissions = { permissions = true },
                         onOpenBackup = onOpenBackup
@@ -1031,6 +1039,8 @@ private fun MoreMenu(
     onLockChange: (Boolean) -> Unit,
     onOpenSlotReminders: () -> Unit,
     onOpenGodTask: () -> Unit,
+    showThought: Boolean,
+    onShowThought: (Boolean) -> Unit,
     onOpenTheme: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenBackup: () -> Unit
@@ -1063,6 +1073,12 @@ private fun MoreMenu(
                 text = { Text("God task") },
                 leadingIcon = { Text(GOD_LAMP) },
                 onClick = { open = false; onOpenGodTask() }
+            )
+            DropdownMenuItem(
+                text = { Text("Thought of the day") },
+                leadingIcon = { Text(THOUGHT_MARK, color = Fresh.Indigo) },
+                trailingIcon = { Switch(checked = showThought, onCheckedChange = null) },
+                onClick = { onShowThought(!showThought) }
             )
             DropdownMenuItem(
                 text = { Text("Theme") },
@@ -1532,39 +1548,46 @@ private fun DayPageList(
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
 
     // Reads top to bottom from the top bar: Morning → Night, Overdue → later dates, then Upcoming and Done.
-    // Now keeps its Thought of the day pinned at the bottom, just above the dock; the list scrolls above it.
-    Column(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (sections.isEmpty()) {
-                item(key = "empty") {
-                    val (title, body) = when (page) {
-                        DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Near."
-                        DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
-                        DayPage.LATER -> "Nothing planned next" to "Actions due after tomorrow show up here."
-                    }
-                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(title, style = MaterialTheme.typography.headlineMedium)
-                        Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
-                    }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (sections.isEmpty()) {
+            item(key = "empty") {
+                val (title, body) = when (page) {
+                    DayPage.TODAY -> "All clear today" to "Nothing due or late. Type a task below, or check Near."
+                    DayPage.TOMORROW -> "Nothing for tomorrow" to "Actions due tomorrow show up here."
+                    DayPage.LATER -> "Nothing planned next" to "Actions due after tomorrow show up here."
+                }
+                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(title, style = MaterialTheme.typography.headlineMedium)
+                    Text(body, style = MaterialTheme.typography.bodyMedium, color = Fresh.TextDim)
                 }
             }
-            sections.forEach { section ->
-                item(key = section.key) {
-                    if (section.key == UPCOMING_KEY) {
-                        GroupHeader(
-                            section.label, upcoming.size, group,
-                            Modifier.animateItem().clickable(onClick = onToggleUpcoming),
-                            trailing = if (showUpcoming) "Hide" else "Show"
-                        )
-                    } else {
-                        GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
-                    }
+        }
+        sections.forEach { section ->
+            item(key = section.key) {
+                if (section.key == UPCOMING_KEY) {
+                    GroupHeader(
+                        section.label, upcoming.size, group,
+                        Modifier.animateItem().clickable(onClick = onToggleUpcoming),
+                        trailing = if (showUpcoming) "Hide" else "Show"
+                    )
+                } else {
+                    GroupHeader(section.label, section.items.size, group, Modifier.animateItem())
                 }
-                items(section.items, key = { it.id }) { item ->
+            }
+            items(section.items, key = { it.id }) { item ->
+                if (ThoughtTasks.isThought(item)) {
+                    ThoughtRow(
+                        item,
+                        onToggle = { vm.toggleDone(item) },
+                        onEdit = { onEdit(item) },
+                        onDelete = { onDelete(item) },
+                        modifier = Modifier.animateItem()
+                    )
+                } else {
                     ActionRow(
                         item, if (section.key == UPCOMING_KEY) Group.TIME else group,
                         onToggle = { vm.toggleDone(item) },
@@ -1576,17 +1599,18 @@ private fun DayPageList(
                 }
             }
         }
-        if (page == DayPage.TODAY) ThoughtLine(vm.thought, Modifier.padding(horizontal = 16.dp))
     }
 }
 
 /**
- * Thought of the day: a small aurora card (soft indigo → sky → teal wash, two glows, a faint
- * oversized quote mark) so it reads as a quote, never as a white task row. Built only from
- * [Fresh] colours, so it follows whatever palette the theme provides.
+ * Thought of the day as a task: a small aurora card (soft indigo → sky → teal wash, two glows, a
+ * faint oversized quote mark) so it reads as a quote, never as a white task row. Ticking it means
+ * it was read. Built only from [Fresh] colours, so it follows whatever palette the theme provides.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ThoughtLine(thought: Thought, modifier: Modifier = Modifier) {
+private fun ThoughtRow(item: Item, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+    val isDone = item.status == STATUS_DONE
     val shape = RoundedCornerShape(18.dp)
     val wash = Brush.linearGradient(
         listOf(Fresh.Indigo.copy(alpha = 0.16f), Fresh.Sky.copy(alpha = 0.07f), Fresh.Teal.copy(alpha = 0.16f))
@@ -1596,45 +1620,68 @@ private fun ThoughtLine(thought: Thought, modifier: Modifier = Modifier) {
     )
     val indigoGlow = Fresh.Indigo.copy(alpha = 0.18f)
     val tealGlow = Fresh.Teal.copy(alpha = 0.16f)
-    Box(
-        modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp)
-            .clip(shape)
-            .background(Fresh.GlassStrong)
-            .background(wash)
-            .drawBehind {
-                drawCircle(
-                    Brush.radialGradient(listOf(indigoGlow, Color.Transparent), Offset(0f, 0f), size.height * 1.1f),
-                    radius = size.height * 1.1f, center = Offset(0f, 0f)
-                )
-                drawCircle(
-                    Brush.radialGradient(listOf(tealGlow, Color.Transparent), Offset(size.width, size.height), size.height * 1.3f),
-                    radius = size.height * 1.3f, center = Offset(size.width, size.height)
-                )
+    // Sideways swipes change pages, so delete is a long-press, like every other row.
+    var menu by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Box(
+            Modifier.fillMaxWidth()
+                .clip(shape)
+                .background(Fresh.GlassStrong)
+                .background(wash)
+                .drawBehind {
+                    drawCircle(
+                        Brush.radialGradient(listOf(indigoGlow, Color.Transparent), Offset(0f, 0f), size.height * 1.1f),
+                        radius = size.height * 1.1f, center = Offset(0f, 0f)
+                    )
+                    drawCircle(
+                        Brush.radialGradient(listOf(tealGlow, Color.Transparent), Offset(size.width, size.height), size.height * 1.3f),
+                        radius = size.height * 1.3f, center = Offset(size.width, size.height)
+                    )
+                }
+                .border(1.dp, rim, shape)
+                .combinedClickable(onClick = onEdit, onLongClickLabel = "Delete options", onLongClick = { menu = true })
+                // A thought already read fades back, like the Done rows around it.
+                .graphicsLayer { alpha = if (isDone) 0.6f else 1f }
+        ) {
+            // An oversized open-quote, tucked into the top-right corner as a watermark.
+            Text(
+                "“",
+                Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = (-14).dp).graphicsLayer { alpha = 0.22f },
+                style = TextStyle(
+                    brush = Fresh.accent, fontSize = 76.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
+                ),
+                maxLines = 1
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 40.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                GlowCheck(isDone, onToggle)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (isDone) "$THOUGHT_MARK  THOUGHT OF THE DAY · READ" else "$THOUGHT_MARK  THOUGHT OF THE DAY",
+                        style = MaterialTheme.typography.labelSmall.copy(brush = Fresh.accentHorizontal, letterSpacing = 1.2.sp)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        item.title,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic, fontFamily = FontFamily.Serif),
+                        color = Fresh.Text
+                    )
+                    if (item.notes.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text("— ${item.notes}", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
+                    }
+                }
             }
-            .border(1.dp, rim, shape)
-    ) {
-        // An oversized open-quote, tucked into the top-right corner as a watermark.
-        Text(
-            "\u201C",
-            Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = (-14).dp).graphicsLayer { alpha = 0.22f },
-            style = TextStyle(
-                brush = Fresh.accent, fontSize = 76.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
-            ),
-            maxLines = 1
-        )
-        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 40.dp, top = 10.dp, bottom = 10.dp)) {
-            Text(
-                "\u2726  THOUGHT OF THE DAY",
-                style = MaterialTheme.typography.labelSmall.copy(brush = Fresh.accentHorizontal, letterSpacing = 1.2.sp)
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fresh.Coral) },
+                onClick = { menu = false; onDelete() }
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                thought.text,
-                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic, fontFamily = FontFamily.Serif),
-                color = Fresh.Text
-            )
-            Spacer(Modifier.height(2.dp))
-            Text("\u2014 ${thought.source}", style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
         }
     }
 }

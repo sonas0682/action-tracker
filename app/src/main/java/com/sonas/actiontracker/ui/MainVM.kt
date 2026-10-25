@@ -14,8 +14,6 @@ import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Series
 import com.sonas.actiontracker.data.SeriesScope
 import com.sonas.actiontracker.data.Snapshot
-import com.sonas.actiontracker.data.Thought
-import com.sonas.actiontracker.data.Thoughts
 import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.sync.Backup
@@ -23,6 +21,7 @@ import com.sonas.actiontracker.sync.GodTasks
 import com.sonas.actiontracker.sync.GoogleAuth
 import com.sonas.actiontracker.sync.SmartTitles
 import com.sonas.actiontracker.sync.SyncEngine
+import com.sonas.actiontracker.sync.ThoughtTasks
 import com.sonas.actiontracker.widget.DueWidget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -40,12 +39,9 @@ class MainVM(app: Application) : AndroidViewModel(app) {
     val suggested = dao.suggested().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val actions = dao.actions().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Thought of the day at the bottom of Now: a different one on every launch. */
-    val thought: Thought = app.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).let { prefs ->
-        val i = Thoughts.next(prefs.getInt("last_thought", -1))
-        prefs.edit().putInt("last_thought", i).apply()
-        Thoughts.all[i]
-    }
+    /** ⋮ → Thought of the day: off hides thought rows from the lists. */
+    var showThought by mutableStateOf(ThoughtTasks.enabled(app))
+        private set
 
     var syncing by mutableStateOf(false)
         private set
@@ -64,8 +60,17 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Adds this morning's God tasks on app open if the 15-minute reminder check hasn't yet. */
-    fun godTasks() = viewModelScope.launch { addGodTasks() }
+    /** Adds today's God tasks and Thought of the day on app open if the 15-minute reminder check hasn't yet. */
+    fun dailyTasks() = viewModelScope.launch {
+        addGodTasks()
+        if (runCatching { ThoughtTasks.ensureToday(getApplication()) }.getOrDefault(false)) afterWrite()
+    }
+
+    /** ⋮ → Thought of the day: on adds today's at once; off removes the unread one. */
+    fun setShowThought(on: Boolean) = viewModelScope.launch {
+        showThought = on
+        if (runCatching { ThoughtTasks.setEnabled(getApplication(), on) }.getOrDefault(false)) afterWrite()
+    }
 
     /** Saves the ⋮ → God task theme; turning it on adds today's right away (after 6 AM). */
     /** Saves the Light / Dark / System choice; the app recolours at once, the widget on its redraw. */
