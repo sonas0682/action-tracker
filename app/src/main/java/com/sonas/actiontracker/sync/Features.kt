@@ -103,7 +103,7 @@ object Features {
         Row(
             "Screen lock",
             if (s.screenLock) State.ON else State.OFF,
-            if (s.screenLock) "Fingerprint lock can be turned on from the ⋮ menu"
+            if (s.screenLock) "Fingerprint lock can be turned on in ⋮ → Settings"
             else "Set up a fingerprint, face or PIN in Android settings to use the app lock"
         )
     )
@@ -115,7 +115,7 @@ object Features {
             "Google Drive backup",
             if (s.driveBackup) State.ON else State.OFF,
             if (s.driveBackup) "Encrypted backup to the app's hidden Drive folder"
-            else "No backup: your actions live only on this phone. Turn on under ⋮ → Google Drive backup."
+            else "No backup: your actions live only on this phone. Turn on under ⋮ → Settings → Google Drive backup."
         )
     )
 

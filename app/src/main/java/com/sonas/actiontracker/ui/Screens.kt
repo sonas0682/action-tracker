@@ -102,6 +102,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
@@ -114,6 +115,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -357,6 +359,8 @@ fun AppScreen(
     // ⋮ → Contexts opens the list; a context's page opens from it or from a Context group header.
     var contextsOpen by rememberSaveable { mutableStateOf(false) }
     var contextPage by rememberSaveable { mutableStateOf<String?>(null) }
+    // ⋮ → Settings: the once-set options, grouped on their own page.
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var voiceDraft by remember { mutableStateOf<VoiceDraft.Draft?>(null) }
     var photoDraft by remember { mutableStateOf<PhotoDraft.Draft?>(null) }
     var readingPhoto by remember { mutableStateOf<String?>(null) }
@@ -373,10 +377,6 @@ fun AppScreen(
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
-    var slotReminders by remember { mutableStateOf(false) }
-    var godTask by remember { mutableStateOf(false) }
-    var theme by remember { mutableStateOf(false) }
-    var permissions by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -439,7 +439,7 @@ fun AppScreen(
         }
     }
     vm.message?.let { lastMessage = it }
-    // ⋮ → Thought of the day off also hides thought rows already read today.
+    // ⋮ → Settings → Thought of the day off also hides thought rows already read today.
     val showThought = vm.showThought
     val dayPages = remember(actions, today(), showThought) {
         val shown = if (showThought) actions else actions.filterNot { ThoughtTasks.isThought(it) }
@@ -453,8 +453,8 @@ fun AppScreen(
     // Back from any other page returns to Today before leaving the app.
     BackHandler(enabled = tab != 0) { goTo(0) }
     // Back from a context page returns to the Contexts list (when it came from there), then home.
-    BackHandler(enabled = contextPage != null || contextsOpen) {
-        if (contextPage != null) contextPage = null else contextsOpen = false
+    BackHandler(enabled = contextPage != null || contextsOpen || settingsOpen) {
+        if (contextPage != null) contextPage = null else if (contextsOpen) contextsOpen = false else settingsOpen = false
     }
     val contextActions = remember(actions, showThought) { if (showThought) actions else actions.filterNot { ThoughtTasks.isThought(it) } }
     val newInContext: (String) -> Item = { ctx ->
@@ -487,6 +487,8 @@ fun AppScreen(
             )
         } else if (contextsOpen) {
             ContextsScreen(contextActions, onOpen = { contextPage = it }, onBack = { contextsOpen = false })
+        } else if (settingsOpen) {
+            SettingsScreen(vm, lockEnabled, onLockChange, onOpenBackup, onSync, onBack = { settingsOpen = false })
         } else {
             // Thumb-first: a slim header on top names the page (its date, title or month); the type bar,
             // group-by, menu and tabs sit in a two-row bottom dock, and lists are anchored to the bottom so
@@ -574,15 +576,8 @@ fun AppScreen(
                     menu = {
                         MoreMenu(
                             vm.syncing, onSync,
-                            lockEnabled, onLockChange,
-                            onOpenSlotReminders = { slotReminders = true },
-                            onOpenGodTask = { godTask = true },
-                            showThought = showThought,
-                            onShowThought = vm::setShowThought,
-                            onOpenTheme = { theme = true },
-                            onOpenPermissions = { permissions = true },
-                            onOpenBackup = onOpenBackup,
-                            onOpenContexts = { contextsOpen = true }
+                            onOpenContexts = { contextsOpen = true },
+                            onOpenSettings = { settingsOpen = true }
                         )
                     }
                 )
@@ -709,11 +704,6 @@ fun AppScreen(
             onDismiss = { pendingSave = null }
         )
     }
-
-    if (slotReminders) RemindersDialog(onDismiss = { slotReminders = false })
-    if (godTask) GodTaskDialog(onPick = vm::setGodTheme, onCounts = vm::setGodCounts, onDismiss = { godTask = false })
-    if (theme) ThemeDialog(ThemePref.mode, onPick = { vm.setThemeMode(it); theme = false }, onDismiss = { theme = false })
-    if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
 
 /**
@@ -1082,20 +1072,16 @@ internal fun GlassIconButton(onClick: () -> Unit, enabled: Boolean = true, conte
     ) { content() }
 }
 
+/**
+ * The ⋮ menu keeps only what is used often: Sync now and Contexts, then Settings, which holds
+ * everything set once (reminders, God task, thought, theme, lock, backup, permissions).
+ */
 @Composable
 private fun MoreMenu(
     syncing: Boolean,
     onSync: () -> Unit,
-    lockEnabled: Boolean,
-    onLockChange: (Boolean) -> Unit,
-    onOpenSlotReminders: () -> Unit,
-    onOpenGodTask: () -> Unit,
-    showThought: Boolean,
-    onShowThought: (Boolean) -> Unit,
-    onOpenTheme: () -> Unit,
-    onOpenPermissions: () -> Unit,
-    onOpenBackup: () -> Unit,
-    onOpenContexts: () -> Unit
+    onOpenContexts: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -1108,7 +1094,7 @@ private fun MoreMenu(
         ) {
             DropdownMenuItem(
                 text = { Text(if (syncing) "Syncing…" else "Sync now") },
-                leadingIcon = { Icon(Icons.Rounded.Refresh, null, tint = if (syncing) Fresh.Sky else Fresh.Text) },
+                leadingIcon = { Icon(Icons.Rounded.Refresh, null, tint = if (syncing) Fresh.Sky else Fresh.Indigo) },
                 enabled = !syncing,
                 onClick = { open = false; onSync() }
             )
@@ -1117,66 +1103,14 @@ private fun MoreMenu(
                 leadingIcon = { Icon(Icons.Rounded.Place, null, tint = Fresh.Indigo) },
                 onClick = { open = false; onOpenContexts() }
             )
+            HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Fresh.Rim)
             DropdownMenuItem(
-                text = { Text("Fingerprint lock") },
-                trailingIcon = { Switch(checked = lockEnabled, onCheckedChange = null) },
-                onClick = { onLockChange(!lockEnabled) }
-            )
-            DropdownMenuItem(
-                text = { Text("Reminders") },
-                onClick = { open = false; onOpenSlotReminders() }
-            )
-            DropdownMenuItem(
-                text = { Text("God task") },
-                leadingIcon = { Text(GOD_LAMP) },
-                onClick = { open = false; onOpenGodTask() }
-            )
-            DropdownMenuItem(
-                text = { Text("Thought of the day") },
-                leadingIcon = { Text(THOUGHT_MARK, color = Fresh.Indigo) },
-                trailingIcon = { Switch(checked = showThought, onCheckedChange = null) },
-                onClick = { onShowThought(!showThought) }
-            )
-            DropdownMenuItem(
-                text = { Text("Theme") },
-                trailingIcon = { Text(ThemePref.mode.label, style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim) },
-                onClick = { open = false; onOpenTheme() }
-            )
-            DropdownMenuItem(
-                text = { Text("Google Drive backup") },
-                onClick = { open = false; onOpenBackup() }
-            )
-            DropdownMenuItem(
-                text = { Text("Permissions & features") },
-                onClick = { open = false; onOpenPermissions() }
+                text = { Text("Settings") },
+                leadingIcon = { Icon(Icons.Rounded.Settings, null, tint = Fresh.Indigo) },
+                onClick = { open = false; onOpenSettings() }
             )
         }
     }
-}
-
-/** Light, Dark or System default (follows Android's dark mode); tapping one applies it at once. */
-@Composable
-private fun ThemeDialog(current: ThemeMode, onPick: (ThemeMode) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Theme") },
-        text = {
-            Column {
-                ThemeMode.entries.forEach { mode ->
-                    Row(
-                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
-                            .clickable { onPick(mode) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = mode == current, onClick = { onPick(mode) })
-                        Text(mode.label, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
-    )
 }
 
 @Composable
@@ -1212,7 +1146,7 @@ private fun ReminderTimeDialog(title: String, initial: LocalTime, onDismiss: () 
 
 /** The 8 AM digest switch, then one row per time of day: on/off and the time its pop-up fires. */
 @Composable
-private fun RemindersDialog(onDismiss: () -> Unit) {
+internal fun RemindersDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     var digest by remember { mutableStateOf(Reminders.enabled(context)) }
     var slots by remember { mutableStateOf(SlotReminders.settings(context)) }
@@ -1280,9 +1214,9 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
     }
 }
 
-/** ⋮ → God task: how many on weekdays / weekends (0 = none), and Random (the default) or one theme; or Off. */
+/** Settings → God task: how many on weekdays / weekends (0 = none), and Random (the default) or one theme; or Off. */
 @Composable
-private fun GodTaskDialog(onPick: (String) -> Unit, onCounts: (Int, Int) -> Unit, onDismiss: () -> Unit) {
+internal fun GodTaskDialog(onPick: (String) -> Unit, onCounts: (Int, Int) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     var choice by remember { mutableStateOf(GodTasks.choice(context)) }
     var weekday by remember { mutableIntStateOf(GodTasks.weekdayCount(context)) }
@@ -1344,7 +1278,7 @@ private fun GodCountRow(label: String, count: Int, onChange: (Int) -> Unit) {
 }
 
 @Composable
-private fun MessageBanner(text: String, onClose: () -> Unit) {
+internal fun MessageBanner(text: String, onClose: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
             .glass(RoundedCornerShape(16.dp), strong = true)
@@ -2438,11 +2372,11 @@ private fun ContextScreen(
 
 /** The context screens keep the app's three zones: a page header with Back, the sunken list, a dock. */
 @Composable
-private fun ContextFrame(
+internal fun ContextFrame(
     caption: String,
     title: String,
     onBack: () -> Unit,
-    dock: @Composable (Modifier) -> Unit,
+    dock: (@Composable (Modifier) -> Unit)?,
     content: @Composable BoxScope.() -> Unit
 ) {
     Column(
@@ -2470,6 +2404,11 @@ private fun ContextFrame(
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth(), content = content)
+        if (dock == null) {
+            // No dock (Settings): the list runs to the bottom, clear of the gesture bar.
+            Spacer(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)))
+            return@Column
+        }
         Box(
             Modifier.fillMaxWidth()
                 .zIndex(1f)

@@ -22,7 +22,7 @@ const val GOD_LAMP = "\uD83E\uDE94"
 
 /**
  * God tasks: short activities added to today's Evening every morning from [START_TIME], one each
- * weekday and three on Saturday and Sunday unless ⋮ → God task sets other counts (0 to [MAX_COUNT]).
+ * weekday and three on Saturday and Sunday unless ⋮ → Settings → God task sets other counts (0 to [MAX_COUNT]).
  * The theme comes from the same dialog (Random by default, weekends included). An unfinished God
  * task isn't left overdue: it moves to today and counts toward today's number, so new ones only
  * fill the gap. On a day whose count is 0, unfinished God tasks are removed instead, so none show.
@@ -68,7 +68,7 @@ object GodTasks {
     fun weekendCount(context: Context): Int =
         prefs(context).getInt("weekend_count", WEEKEND_DEFAULT).coerceIn(0, MAX_COUNT)
 
-    /** Saves the ⋮ → God task counts; the caller runs [ensureToday] with force so today follows at once. */
+    /** Saves the ⋮ → Settings → God task counts; the caller runs [ensureToday] with force so today follows at once. */
     fun setCounts(context: Context, weekday: Int, weekend: Int) {
         prefs(context).edit()
             .putInt("weekday_count", weekday.coerceIn(0, MAX_COUNT))

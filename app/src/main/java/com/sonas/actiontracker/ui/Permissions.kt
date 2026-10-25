@@ -43,7 +43,7 @@ import com.sonas.actiontracker.sync.Features
 import com.sonas.actiontracker.sync.GoogleAuth
 
 /**
- * ⋮ → Permissions & features: every permission, Google source and on-device model, with
+ * ⋮ → Settings → Permissions & features: every permission, Google source and on-device model, with
  * what works, what runs in basic (rule-based) mode and what is off, plus a button to fix it.
  * Re-reads everything when the user comes back from Android settings.
  */

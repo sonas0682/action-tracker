@@ -22,7 +22,7 @@ import java.time.OffsetDateTime
 import java.util.Base64
 
 /**
- * Gmail and Calendar access. Each source can be switched off on its own (⋮ → Permissions &
+ * Gmail and Calendar access. Each source can be switched off on its own (⋮ → Settings → Permissions &
  * features), and a source the user unticks on Google's consent screen is switched off too, so
  * the app only ever asks for what is on and the other source keeps working.
  */
