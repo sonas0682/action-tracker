@@ -39,7 +39,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/SmartTitles.kt` | Gemini Nano summarization: email titles and three-bullet summaries |
 | `sync/VoiceDraft.kt` | Spoken sentence to draft `Item` (rules + Nano proofreading) |
 | `sync/PhotoDraft.kt` | Photo, shared image or shared text to draft `Item` (ML Kit OCR + entity extraction, date rules, Nano summary) |
-| `sync/GodTasks.kt`, `data/GodTaskLibrary.kt` | Daily God task (source `GOD`, Evening, 1 weekday / 3 weekend, carry-over, 60-day no-repeat), 30 tasks per theme |
+| `sync/GodTasks.kt`, `data/GodTaskLibrary.kt` | Daily God task (source `GOD`, Evening, 1 weekday / 3 weekend by default (0-5 each in ⋮ → God task), carry-over, 60-day no-repeat), 30 tasks per theme |
 | `data/Thoughts.kt`, `sync/ThoughtTasks.kt` | Thought of the day: quote lines, and the daily task (source `THOUGHT`, Morning, one per day, unread one replaced next day; ⋮ switch, on by default) |
 | `sync/Reminders.kt` | 8 AM daily digest; `ReminderWorker` runs every 15 min |
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
@@ -52,7 +52,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 
 ## Hard rules
 
-- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 6). Any change to an
+- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 7). Any change to an
   entity needs a version bump, a `Migration` registered in `addMigrations`, and matching
   `Backup` export/import fields. An older build over a newer database crashes at launch, so
   never hand out an APK built from a branch with a lower `DB_VERSION` than `main`. Details in

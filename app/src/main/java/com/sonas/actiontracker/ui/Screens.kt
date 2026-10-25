@@ -2,6 +2,7 @@
 
 package com.sonas.actiontracker.ui
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
@@ -190,6 +191,7 @@ import com.sonas.actiontracker.data.STATUS_DONE
 import com.sonas.actiontracker.data.STATUS_OPEN
 import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.GOD_LAMP
+import com.sonas.actiontracker.sync.GmailLink
 import com.sonas.actiontracker.sync.GodTasks
 import com.sonas.actiontracker.sync.Reminders
 import com.sonas.actiontracker.sync.SlotReminders
@@ -664,7 +666,7 @@ fun AppScreen(
     }
 
     if (slotReminders) RemindersDialog(onDismiss = { slotReminders = false })
-    if (godTask) GodTaskDialog(onPick = vm::setGodTheme, onDismiss = { godTask = false })
+    if (godTask) GodTaskDialog(onPick = vm::setGodTheme, onCounts = vm::setGodCounts, onDismiss = { godTask = false })
     if (theme) ThemeDialog(ThemePref.mode, onPick = { vm.setThemeMode(it); theme = false }, onDismiss = { theme = false })
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false })
 }
@@ -1221,11 +1223,13 @@ private fun RemindersDialog(onDismiss: () -> Unit) {
     }
 }
 
-/** ⋮ → God task: Random (the default) or one theme, used on weekends too; or Off. */
+/** ⋮ → God task: how many on weekdays / weekends (0 = none), and Random (the default) or one theme; or Off. */
 @Composable
-private fun GodTaskDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+private fun GodTaskDialog(onPick: (String) -> Unit, onCounts: (Int, Int) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     var choice by remember { mutableStateOf(GodTasks.choice(context)) }
+    var weekday by remember { mutableIntStateOf(GodTasks.weekdayCount(context)) }
+    var weekend by remember { mutableIntStateOf(GodTasks.weekendCount(context)) }
     val options = listOf(GodTasks.RANDOM) + GodTheme.entries.map { it.name } + GodTasks.OFF
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1233,11 +1237,14 @@ private fun GodTaskDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
         text = {
             Column {
                 Text(
-                    "Each morning a short task (under 15 minutes) is added to today's Evening: one on weekdays, " +
-                        "three on weekends. One left undone moves to the next day instead of a new one.",
+                    "Each morning short tasks (under 15 minutes) are added to today's Evening. One left undone " +
+                        "moves to the next day instead of a new one; 0 means no God tasks that day.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Fresh.TextDim
                 )
+                Spacer(Modifier.height(8.dp))
+                GodCountRow("Weekdays", weekday) { weekday = it; onCounts(weekday, weekend) }
+                GodCountRow("Weekends", weekend) { weekend = it; onCounts(weekday, weekend) }
                 Spacer(Modifier.height(8.dp))
                 options.forEach { option ->
                     Row(
@@ -1253,7 +1260,7 @@ private fun GodTaskDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "A new theme applies from the next morning.",
+                    "Counts apply today; a new theme from the next morning.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Fresh.TextDim
                 )
@@ -1261,6 +1268,22 @@ private fun GodTaskDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
     )
+}
+
+/** "Weekdays  − 1 +": a God task count from 0 to [GodTasks.MAX_COUNT]. */
+@Composable
+private fun GodCountRow(label: String, count: Int, onChange: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        TextButton(onClick = { onChange(count - 1) }, enabled = count > 0) { Text("−", style = MaterialTheme.typography.titleLarge) }
+        Text(
+            if (count == 0) "None" else "$count",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(48.dp)
+        )
+        TextButton(onClick = { onChange(count + 1) }, enabled = count < GodTasks.MAX_COUNT) { Text("+", style = MaterialTheme.typography.titleLarge) }
+    }
 }
 
 @Composable
@@ -1435,8 +1458,13 @@ private fun DeckButton(icon: ImageVector, label: String, tint: Color, size: Dp, 
 @Composable
 private fun SuggestionCard(item: Item, offset: Offset, threshold: Float, modifier: Modifier = Modifier) {
     val tint = sourceColor(item.source)
+    val context = LocalContext.current
+    // Gmail cards open the email on a tap; a drag still swipes, because the deck's drag consumes the gesture first.
+    val openMail = if (item.source == "GMAIL") Modifier.clickable(onClickLabel = "Open in Gmail") {
+        if (!GmailLink.open(context, item.sourceRef)) Toast.makeText(context, "No app can open Gmail", Toast.LENGTH_SHORT).show()
+    } else Modifier
     Box(modifier.glass(RoundedCornerShape(26.dp), strong = true)) {
-        Column(Modifier.fillMaxSize().padding(20.dp)) {
+        Column(Modifier.fillMaxSize().then(openMail).padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.18f)),
@@ -1454,6 +1482,11 @@ private fun SuggestionCard(item: Item, offset: Offset, threshold: Float, modifie
                     style = MaterialTheme.typography.labelLarge,
                     color = tint
                 )
+                if (item.source == "GMAIL") {
+                    Spacer(Modifier.weight(1f))
+                    Text("Open", style = MaterialTheme.typography.labelMedium, color = tint)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = tint, modifier = Modifier.size(18.dp))
+                }
             }
             Spacer(Modifier.height(14.dp))
             Text(item.title, style = MaterialTheme.typography.headlineSmall, maxLines = 4, overflow = TextOverflow.Ellipsis)

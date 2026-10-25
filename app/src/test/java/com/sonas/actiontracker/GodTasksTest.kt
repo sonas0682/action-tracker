@@ -41,6 +41,18 @@ class GodTasksTest {
         assertTrue(GodTasks.plan(sat.plusDays(2), GodTasks.RANDOM, 3, emptyMap(), 0, Random(1)).isEmpty())
     }
 
+    @Test fun countsFollowTheSettings() {
+        assertEquals(0, GodTasks.countFor(wed, weekday = 0, weekend = 2))
+        assertEquals(2, GodTasks.countFor(sat, weekday = 0, weekend = 2))
+        assertTrue(GodTasks.plan(wed, GodTasks.RANDOM, 0, emptyMap(), 0, Random(1), count = 0).isEmpty())
+        assertEquals(2, GodTasks.plan(sat, GodTasks.RANDOM, 0, emptyMap(), 0, Random(1), count = 2).size)
+        assertEquals(4, GodTasks.plan(wed, GodTheme.HEALTH.name, 1, emptyMap(), 0, Random(1), count = 5).size)
+        // Random gives each task its own theme, so it never asks for more than there are themes.
+        val many = GodTasks.plan(sat, GodTasks.RANDOM, 0, emptyMap(), 0, Random(1), count = 9)
+        assertEquals(GodTasks.MAX_COUNT, many.size)
+        assertEquals(many.size, many.map { it.theme }.toSet().size)
+    }
+
     @Test fun offAddsNothing() = assertTrue(GodTasks.plan(sat, GodTasks.OFF, 0, emptyMap(), 0, Random(1)).isEmpty())
 
     @Test fun randomWeekendUsesThreeThemesAndFixedThemeIsKept() {

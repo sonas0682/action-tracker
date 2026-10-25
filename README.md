@@ -85,7 +85,7 @@ Nano only runs while the app is open, and only on phones that support it.
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.
 - **Suggested inbox**: tasks found in Gmail and Calendar wait here as a stack of cards. Swipe right
   to add, left to skip, up to edit first (or use the buttons under the cards), with Undo; "All N"
-  left of the type bar takes them all. The same email or event is never suggested twice.
+  left of the type bar takes them all. Tap an email card to open that email in the Gmail app (Gmail on the web if the app is missing). The same email or event is never suggested twice.
 - **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
 - **Time of day**: each task is Morning, Afternoon, Evening or Night.
 - **Now / Near / Next pages**: the app opens on Now (overdue plus due today, and anything finished today). Swipe sideways, or tap the bottom tabs, to move to Near (due tomorrow), Next (everything after tomorrow, including Upcoming repeats), Suggested, Calendar and Stats; each task tab shows its count. Back returns to Now.
@@ -97,7 +97,9 @@ Nano only runs while the app is open, and only on phones that support it.
   is due. Each reminder is one notification with Snooze 30 min (and Done when it lists one task).
   Notifications also show on a paired watch.
 - **God task** (⋮ → God task): every morning at 6 AM a short task (under 15 minutes) lands in
-  today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends. Themes are
+  today's Evening on a gold card with a 🪔 lamp: one on weekdays, three on weekends by default
+  (set each from None to 5 in the same dialog; None shows no God tasks that day and clears any
+  unfinished ones). Themes are
   Gratitude, Leadership, Networking, Health and Family (Family tasks rotate Nathiya, Vibu and
   Dharshu); pick one or leave it on Random (the default; also used on weekends), or turn it Off.
   Long-press one for **Another God task** (same theme, Undo brings the old one back). One left
