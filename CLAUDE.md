@@ -45,7 +45,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/SlotReminders.kt` | Time-of-day pop-ups (12/4/7/10 PM) via AlarmManager |
 | `sync/TaskNotifications.kt` | One notification per reminder listing its tasks (Snooze 30 min; Done only when it lists one task); no per-task notifications |
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
-| `ui/Screens.kt`, `MainVM.kt` | Main screen (page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Now / Near / Next (today / tomorrow / later) / Suggested / Calendar / Stats pages in a swipeable pager, top-aligned lists, Suggested swipe deck), edit sheet, long-press delete |
+| `ui/Screens.kt`, `MainVM.kt`, `ContextPages.kt` | Main screen (⋮ → Contexts list and per-context pages, page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Now / Near / Next (today / tomorrow / later) / Suggested / Calendar / Stats pages in a swipeable pager, top-aligned lists, Suggested swipe deck), edit sheet, long-press delete |
 | `ui/Insights.kt` | Calendar and Stats pages (`InsightsPage`) |
 | `ui/Voice.kt`, `Photo.kt`, `BackupUi.kt`, `Theme.kt` | Listen sheet, photo button + draft note, backup dialog, "Fresh" palette (light + dark, `ThemePref` Light / Dark / System in prefs) + `glass()` |
 | `widget/DueWidget.kt` | Glance Today/Tomorrow widget |

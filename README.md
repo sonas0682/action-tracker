@@ -91,6 +91,11 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Now / Near / Next pages**: the app opens on Now (overdue plus due today, and anything finished today). Swipe sideways, or tap the bottom tabs, to move to Near (due tomorrow), Next (everything after tomorrow, including Upcoming repeats), Suggested, Calendar and Stats; each task tab shows its count. Back returns to Now.
 - **Group** each page by date, time of day, person or context (Work, Family, Kids/School). Now and
   Near start grouped by time of day, Next by date; each page remembers its own choice.
+- **Context pages**: ⋮ → Contexts lists every context with its open and done counts (or tap a
+  context header when a page is grouped by Context). A context's page shows all its actions, open
+  by due date and done newest first. Tasks typed there (or added with `+` or voice) are filed under
+  that context and still show on Now, Near or Next by their due date. Type a new name at the bottom
+  of the Contexts list (say "Claude certification") to start a context's page before it has tasks.
 - **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
   one off queues the next.
 - **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what
