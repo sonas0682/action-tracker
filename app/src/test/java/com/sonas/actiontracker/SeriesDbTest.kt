@@ -187,4 +187,24 @@ class SeriesDbTest {
         assertEquals(1, all.count { it.title == "Trash + recycling" })
         assertEquals(t + 1, db.dao().byId(first.id)!!.dueDate)
     }
+
+    @Test fun godTasksAndThoughtsMoveToOneContextEach() = runBlocking {
+        oldDatabase(5, emptyList())
+        val db = open()
+        val dao = db.dao()
+        dao.insert(Item(title = "Do 10 pushups", context = "Health", dueDate = t, status = STATUS_OPEN, source = "GOD"))
+        dao.insert(Item(title = "Quote", context = "Thought", dueDate = t, status = STATUS_DONE, source = "THOUGHT"))
+        dao.insert(Item(title = "Report", context = "Work", dueDate = t, status = STATUS_OPEN, source = "CUSTOM"))
+        assertEquals(1, dao.moveGodTasksToOneContext("God task"))
+        assertEquals(1, dao.moveThoughtsToOneContext("Thought of the day"))
+        // Run again on every start: nothing left to move.
+        assertEquals(0, dao.moveGodTasksToOneContext("God task"))
+        assertEquals(0, dao.moveThoughtsToOneContext("Thought of the day"))
+        val rows = dao.allItems().associateBy { it.title }
+        assertEquals("God task", rows.getValue("Do 10 pushups").context)
+        assertEquals("HEALTH", rows.getValue("Do 10 pushups").sourceRef)
+        assertEquals("Thought of the day", rows.getValue("Quote").context)
+        assertEquals("Work", rows.getValue("Report").context)
+        assertNull(rows.getValue("Report").sourceRef)
+    }
 }

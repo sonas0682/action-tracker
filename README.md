@@ -96,6 +96,8 @@ Nano only runs while the app is open, and only on phones that support it.
   by due date and done newest first. Tasks typed there (or added with `+` or voice) are filed under
   that context and still show on Now, Near or Next by their due date. Type a new name at the bottom
   of the Contexts list (say "Claude certification") to start a context's page before it has tasks.
+  All God tasks sit in one "God task" context (the card still names the theme) and every Thought of
+  the day in one "Thought of the day" context, so each has its own page; older ones move on update.
 - **Repeating tasks**: daily, weekdays, weekly, monthly or yearly, with an optional end. Ticking
   one off queues the next.
 - **Reminders** (⋮ → Reminders): an 8 AM digest and a pop-up at 12, 4, 7 and 10 PM listing what

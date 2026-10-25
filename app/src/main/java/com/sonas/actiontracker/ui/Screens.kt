@@ -397,7 +397,10 @@ fun AppScreen(
         }
     }
     val people = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_PEOPLE) { it.person } }
-    val contexts = remember(actions, suggested) { VoiceDraft.recentValues(actions + suggested, VoiceDraft.DEFAULT_CONTEXTS) { it.context } }
+    // God task and Thought of the day contexts are the app's own, so the edit sheet doesn't offer them.
+    val contexts = remember(actions, suggested) {
+        VoiceDraft.recentValues((actions + suggested).filterNot { GodTasks.isGod(it) || ThoughtTasks.isThought(it) }, VoiceDraft.DEFAULT_CONTEXTS) { it.context }
+    }
     val usualContexts = remember(actions) { VoiceDraft.usualContexts(actions) }
     // A repeating action asks which occurrences first (this one / following / all).
     var pendingDelete by remember { mutableStateOf<Item?>(null) }
@@ -453,7 +456,7 @@ fun AppScreen(
     BackHandler(enabled = contextPage != null || contextsOpen) {
         if (contextPage != null) contextPage = null else contextsOpen = false
     }
-    val contextActions = remember(actions) { actions.filterNot { ThoughtTasks.isThought(it) } }
+    val contextActions = remember(actions, showThought) { if (showThought) actions else actions.filterNot { ThoughtTasks.isThought(it) } }
     val newInContext: (String) -> Item = { ctx ->
         Item.blank().copy(context = ctx, timeOfDay = TimeOfDay.defaultFor(ctx).name)
     }
@@ -1835,7 +1838,7 @@ private fun ActionRow(
             Column(Modifier.weight(1f)) {
                 if (god) {
                     Text(
-                        "$GOD_LAMP  GOD TASK",
+                        GodTasks.themeOf(item)?.let { "$GOD_LAMP  GOD TASK  ·  ${it.label.uppercase()}" } ?: "$GOD_LAMP  GOD TASK",
                         style = MaterialTheme.typography.labelSmall,
                         color = Fresh.Gold
                     )
@@ -2407,15 +2410,25 @@ private fun ContextScreen(
                     }
                 }
                 items(section.items, key = { it.id }) { item ->
-                    // Grouped by date already and all one context, so rows name the person and due day.
-                    ActionRow(
-                        item, Group.CONTEXT,
-                        onToggle = { vm.toggleDone(item) },
-                        onEdit = { onEdit(item) },
-                        onDelete = { onDelete(item) },
-                        onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
-                        modifier = Modifier.animateItem()
-                    )
+                    if (ThoughtTasks.isThought(item)) {
+                        ThoughtRow(
+                            item,
+                            onToggle = { vm.toggleDone(item) },
+                            onEdit = { onEdit(item) },
+                            onDelete = { onDelete(item) },
+                            modifier = Modifier.animateItem()
+                        )
+                    } else {
+                        // Grouped by date already and all one context, so rows name the person and due day.
+                        ActionRow(
+                            item, Group.CONTEXT,
+                            onToggle = { vm.toggleDone(item) },
+                            onEdit = { onEdit(item) },
+                            onDelete = { onDelete(item) },
+                            onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
+                            modifier = Modifier.animateItem()
+                        )
+                    }
                 }
             }
         }

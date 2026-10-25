@@ -56,6 +56,11 @@ class MainVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             // A failure here only delays the fill until the daily SeriesWorker; it must not crash the start.
             runCatching { Series.topUpAll(db) }
+            // God tasks and Thoughts of the day each live in one context (older rows used the theme / "Thought").
+            runCatching {
+                dao.moveGodTasksToOneContext(GodTasks.CONTEXT)
+                dao.moveThoughtsToOneContext(ThoughtTasks.CONTEXT)
+            }
             runCatching { DueWidget.refresh(getApplication()) }
         }
     }

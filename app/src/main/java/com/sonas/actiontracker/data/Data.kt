@@ -151,6 +151,17 @@ interface ItemDao {
     @Query("SELECT COUNT(*) FROM items WHERE source = 'THOUGHT' AND dueDate = :epochDay")
     suspend fun thoughtCountOn(epochDay: Long): Int
 
+    /**
+     * God tasks share one context, with their theme kept in sourceRef (theme labels upper-cased
+     * are the GodTheme names); rows from before that change are moved over on app start.
+     */
+    @Query("UPDATE items SET sourceRef = UPPER(TRIM(context)), context = :godContext WHERE source = 'GOD' AND sourceRef IS NULL")
+    suspend fun moveGodTasksToOneContext(godContext: String): Int
+
+    /** Every Thought of the day sits in one context. */
+    @Query("UPDATE items SET context = :thoughtContext WHERE source = 'THOUGHT' AND context != :thoughtContext")
+    suspend fun moveThoughtsToOneContext(thoughtContext: String): Int
+
     @Query("SELECT DISTINCT seriesId FROM items WHERE seriesId IS NOT NULL")
     suspend fun seriesIds(): List<Long>
 

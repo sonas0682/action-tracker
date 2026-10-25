@@ -34,6 +34,8 @@ const val GOD_LAMP = "\uD83E\uDE94"
  */
 object GodTasks {
     private const val PREFS = "god_tasks"
+    /** Every God task is filed under this one context; its theme lives in sourceRef ([themeOf]). */
+    const val CONTEXT = "God task"
     const val RANDOM = "RANDOM"
     const val OFF = "OFF"
     val START_TIME: LocalTime = LocalTime.of(6, 0)
@@ -149,7 +151,7 @@ object GodTasks {
 
     /** A different task from [item]'s theme, keeping its person; the current one counts as just used. */
     fun replacement(item: Item, history: Map<String, Long>, today: Long, random: Random): Pick? {
-        val theme = GodTheme.entries.firstOrNull { it.label == item.context } ?: return null
+        val theme = themeOf(item) ?: return null
         val person = if (theme == GodTheme.FAMILY) item.person else "Me"
         val used = history.toMutableMap()
         theme.tasks.indices.filter { theme.tasks[it].replace("{name}", person) == item.title }
@@ -163,10 +165,14 @@ object GodTasks {
         val key: String get() = key(theme, index)
 
         fun toItem(epochDay: Long) = Item(
-            title = title, person = person, context = theme.label, dueDate = epochDay,
+            title = title, person = person, context = CONTEXT, sourceRef = theme.name, dueDate = epochDay,
             status = STATUS_OPEN, source = SOURCE_GOD, timeOfDay = TimeOfDay.EVENING.name
         )
     }
+
+    /** A God task's theme: kept in sourceRef; older rows had it as their context. */
+    fun themeOf(item: Item): GodTheme? =
+        GodTheme.of(item.sourceRef.orEmpty()) ?: GodTheme.entries.firstOrNull { it.label == item.context }
 
     fun key(theme: GodTheme, index: Int) = "${theme.name}:$index"
 
