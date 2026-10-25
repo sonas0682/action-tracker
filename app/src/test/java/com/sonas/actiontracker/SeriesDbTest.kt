@@ -92,6 +92,7 @@ class SeriesDbTest {
         assertEquals(Recurrence.NONE.name, history.recurrence)
         assertNull(history.seriesId)
         assertNull(all.single { it.id == 3L }.seriesId)
+        assertNull(all.single { it.id == 3L }.sourceRef)
         assertEquals(DB_VERSION, db.openHelper.readableDatabase.version)
     }
 

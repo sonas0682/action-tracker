@@ -85,7 +85,7 @@ Nano only runs while the app is open, and only on phones that support it.
   as voice capture); tap ✓ or Send to add it. Tap + for the full form.
 - **Suggested inbox**: tasks found in Gmail and Calendar wait here as a stack of cards. Swipe right
   to add, left to skip, up to edit first (or use the buttons under the cards), with Undo; "All N"
-  left of the type bar takes them all. The same email or event is never suggested twice.
+  left of the type bar takes them all. Tap an email card to open that email in the Gmail app (Gmail on the web if the app is missing). The same email or event is never suggested twice.
 - **Due dates**: a date in the text ("by Friday", "Oct 20") is used; otherwise the task is due tomorrow.
 - **Time of day**: each task is Morning, Afternoon, Evening or Night.
 - **Now / Near / Next pages**: the app opens on Now (overdue plus due today, and anything finished today). Swipe sideways, or tap the bottom tabs, to move to Near (due tomorrow), Next (everything after tomorrow, including Upcoming repeats), Suggested, Calendar and Stats; each task tab shows its count. Back returns to Now.

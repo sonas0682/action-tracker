@@ -52,7 +52,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 
 ## Hard rules
 
-- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 6). Any change to an
+- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 7). Any change to an
   entity needs a version bump, a `Migration` registered in `addMigrations`, and matching
   `Backup` export/import fields. An older build over a newer database crashes at launch, so
   never hand out an APK built from a branch with a lower `DB_VERSION` than `main`. Details in
