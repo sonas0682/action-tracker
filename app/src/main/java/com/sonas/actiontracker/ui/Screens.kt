@@ -121,7 +121,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -1442,20 +1441,34 @@ private fun SuggestedDeck(
     }
 }
 
-/** A one-line snackbar for the strip above the Suggested deck: message cut to one line, Undo on the right. */
+/**
+ * The Undo strip above the Suggested deck: a fixed-height white bar with the message on one line
+ * (cut with …) and Undo always on the right. Hand-built because Material's Snackbar needs 48dp and
+ * moves its action under the text when squeezed, which hid Undo in the 44dp strip.
+ */
 @Composable
 private fun SlimUndoHost(state: SnackbarHostState) {
     SnackbarHost(state) { data ->
-        val label = data.visuals.actionLabel
-        val action: (@Composable () -> Unit)? = if (label == null) null else {
-            { TextButton(onClick = { data.performAction() }) { Text(label) } }
-        }
-        Snackbar(
-            action = action,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp)
+        Row(
+            Modifier.fillMaxWidth().widthIn(max = 480.dp).height(44.dp)
+                .glass(RoundedCornerShape(14.dp), strong = true)
+                .padding(start = 14.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(data.visuals.message, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                data.visuals.message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Fresh.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            val label = data.visuals.actionLabel
+            if (label != null) {
+                TextButton(onClick = { data.performAction() }) {
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = Fresh.Indigo, maxLines = 1, softWrap = false)
+                }
+            }
         }
     }
 }
