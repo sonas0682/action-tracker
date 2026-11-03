@@ -121,6 +121,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -535,7 +536,11 @@ fun AppScreen(
                                     vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod,
                                     onOpenContext = { contextPage = it }
                                 )
-                            } else {
+                            } else Column(Modifier.fillMaxSize()) {
+                                // Undo sits in a slim strip above the deck, so it never covers the cards' Skip / Edit / Add buttons.
+                                Box(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+                                    SlimUndoHost(snackbar)
+                                }
                                 SuggestedDeck(
                                     suggested, vm,
                                     onEdit = { editing = it },
@@ -550,7 +555,9 @@ fun AppScreen(
                             }
                         }
                     }
-                    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
+                    if (tab != TAB_SUGGESTED) {
+                        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 8.dp))
+                    }
                 }
                 BottomDock(
                     tab = tab,
@@ -1431,6 +1438,24 @@ private fun SuggestedDeck(
             DeckButton(Icons.Rounded.Close, "Skip", Fresh.Coral, 54.dp) { fling(Swipe.SKIP) }
             DeckButton(Icons.Rounded.Edit, "Edit first", Fresh.Indigo, 44.dp) { fling(Swipe.EDIT) }
             DeckButton(Icons.Rounded.Check, "Add", Fresh.Green, 54.dp) { fling(Swipe.ADD) }
+        }
+    }
+}
+
+/** A one-line snackbar for the strip above the Suggested deck: message cut to one line, Undo on the right. */
+@Composable
+private fun SlimUndoHost(state: SnackbarHostState) {
+    SnackbarHost(state) { data ->
+        val label = data.visuals.actionLabel
+        val action: (@Composable () -> Unit)? = if (label == null) null else {
+            { TextButton(onClick = { data.performAction() }) { Text(label) } }
+        }
+        Snackbar(
+            action = action,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp)
+        ) {
+            Text(data.visuals.message, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
