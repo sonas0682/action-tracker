@@ -53,7 +53,8 @@ App
 - Calendar's day list is one list (no time-of-day sub-headers), each row with its time-of-day icon
   on the right.
 - Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the
-  same; Undo in the snackbar.
+  same; Undo in a slim one-line bar above the deck (moved 2026-11-03 at Sona's request: the
+  bottom snackbar covered the buttons), never over the cards or buttons.
 - The type bar parses with `VoiceDraft.fromRules` and shows chips live. Empty, it offers the mic
   and an icon-only `+` (tap: edit sheet, long-press: voice capture); there is no floating button.
   No per-row delete icon: long-press a row for Delete, with Undo in the snackbar (Sona chose this
