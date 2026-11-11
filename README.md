@@ -147,8 +147,25 @@ Nano only runs while the app is open, and only on phones that support it.
     are open, crosses are done. (The handwriting is the bundled Caveat font, SIL Open Font License.)
   - **Metro Line**: the day as a train line. Times of day are stations, tasks are stops, each
     context has its own line colour and badge, and "You are here" marks the current time on Now.
+- **Move to tomorrow**: long-press a task due today or late and pick Move to tomorrow (with Undo).
+  It moves only that task; nothing rolls over on its own.
+- **Evening reflection** (⋮ → Settings → Evening reflection, on by default): from 7 PM, Now shows a
+  slim "What went well today?" bar until you write a line. Each day's line shows under that day on
+  Calendar, where you can add or change it for any past day. Reflections are part of the Drive backup.
+- **Favorites**: long-press a Thought of the day or a God task and pick Favorite (★). A favorite
+  thought comes back about one day in four; a favorite God task may return after 14 days instead
+  of 60. Past thoughts and God tasks are listed under ⋮ → Contexts → Thought of the day / God task.
+- **Milestones** (Stats page): First Step, Week of Fire, Month of Fire, Centurion, Lamp Keeper,
+  Deep Reader and On-Time Week, worked out from the tasks you have finished. Stats also opens
+  with a card in the Now page's layout (a month statement in Ledger, level and XP in Quest Path,
+  rings closed in Day Dial, evenings written in Journal Page, stops made in Metro Line).
+- **Reminders in your layout's words**: with a layout other than Classic on Now, the digest and
+  pop-ups read like it ("Today's quest: 5 steps, 1 late", "3 stops left on the evening line").
+- **Sign-in heads-up**: about a day before the 7-day Google sign-in (Testing mode) is due to end,
+  a notification says sync will ask you to sign in again. It is an estimate from your last sign-in.
 - **Home-screen widget**: Now (today) and Near (tomorrow) tabs; tick tasks off from the home screen. Task
-  titles are visible there even when the app lock is on.
+  titles are visible there even when the app lock is on. Its title line follows the Now page's layout
+  (Ledger counts, Quest level and streak, a small Day Dial ring, Journal tally, Metro's next stop).
 - **Calendar and stats**: the last two tabs show a month view and how many tasks you finished.
 - **Long-press to delete** (sideways swipes change pages), with Undo.
 - **Fingerprint lock** (optional) and **screenshot blocking**.

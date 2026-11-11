@@ -64,8 +64,32 @@ object GoogleAuth {
         val declined = declined(requested, granted)
         if (GMAIL_SCOPE in declined) setGmail(context, false)
         if (CALENDAR_SCOPE in declined) setCalendar(context, false)
-        if (requested.any { it in granted }) prefs(context).edit().putBoolean("granted_once", true).apply()
+        if (requested.any { it in granted }) {
+            // The consent screen was just passed: the 7-day Testing-mode clock starts again.
+            prefs(context).edit().putBoolean("granted_once", true).putLong("granted_at", System.currentTimeMillis()).apply()
+        }
         return declined.map { if (it == GMAIL_SCOPE) "Gmail" else "Calendar" }
+    }
+
+    /** While the Google project is in Testing mode, a sign-in lasts this many days. */
+    const val SIGN_IN_DAYS = 7L
+    private const val DAY_MS = 86_400_000L
+
+    /**
+     * True on the last day of a sign-in made at [grantedAt], once per sign-in ([warnedFor] is the
+     * sign-in already warned about). An estimate: Google decides when it really ends.
+     */
+    fun signInWarningDue(grantedAt: Long, warnedFor: Long, now: Long): Boolean =
+        grantedAt > 0 && warnedFor != grantedAt && now - grantedAt >= (SIGN_IN_DAYS - 1) * DAY_MS
+
+    /** Called by the periodic check: a heads-up the day before Gmail and Calendar sync asks to sign in again. */
+    fun warnIfExpiring(context: Context, now: Long = System.currentTimeMillis()) {
+        if (wanted(context).isEmpty()) return
+        val p = prefs(context)
+        val grantedAt = p.getLong("granted_at", 0L)
+        if (!signInWarningDue(grantedAt, p.getLong("warned_for", 0L), now)) return
+        p.edit().putLong("warned_for", grantedAt).apply()
+        Notify.signInExpiring(context)
     }
 
     /** The requested scopes missing from the grant. */

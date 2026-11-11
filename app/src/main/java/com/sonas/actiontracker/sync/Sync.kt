@@ -101,6 +101,9 @@ object Notify {
     fun signInNeeded(context: Context) =
         post(context, 2, "Action Tracker", "Sign in to Google again to keep syncing")
 
+    fun signInExpiring(context: Context) =
+        post(context, 3, "Action Tracker", "Google sign-in ends in about a day. Sync will ask you to sign in again; open the app and tap Sync now when it does.")
+
     private fun post(context: Context, id: Int, title: String, text: String) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -114,6 +117,7 @@ object Notify {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

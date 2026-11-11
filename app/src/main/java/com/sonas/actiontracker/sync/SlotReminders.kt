@@ -10,6 +10,10 @@ import android.content.Intent
 import android.os.Build
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.TimeOfDay
+import com.sonas.actiontracker.ui.DayPage
+import com.sonas.actiontracker.ui.LayoutPref
+import com.sonas.actiontracker.ui.Quest
+import com.sonas.actiontracker.ui.slotHeading
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -120,7 +124,10 @@ object SlotReminders {
         prefs.edit().putLong(key, today.toEpochDay()).apply()
         val open = Db.get(context).dao().openDueBy(today.toEpochDay()).filter { TimeOfDay.of(it.timeOfDay) == slot }
         ensureChannel(context)
-        TaskNotifications.post(context, TaskNotifications.slotTag(slot.name), CHANNEL, heading(slot, open.size), open, today, urgent = true)
+        // The pop-up speaks in the Now page's layout: "3 stops left on the evening line".
+        val title = slotHeading(LayoutPref.read(context, DayPage.TODAY), slot, open.size, open.sumOf { Quest.xpFor(it) })
+            ?: heading(slot, open.size)
+        TaskNotifications.post(context, TaskNotifications.slotTag(slot.name), CHANNEL, title, open, today, urgent = true)
     }
 
     internal fun heading(slot: TimeOfDay, count: Int): String =

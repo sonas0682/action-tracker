@@ -83,7 +83,9 @@ data class Item(
     /** "Ends after N times" (the first occurrence counts); null for "Never" or "On a date". */
     val endCount: Int? = null,
     /** Gmail message id of a GMAIL suggestion, so tapping it opens the email; null for other sources and mail synced before v7. */
-    val sourceRef: String? = null
+    val sourceRef: String? = null,
+    /** A Thought of the day or God task marked as a favourite, so it comes round again sooner. */
+    @ColumnInfo(defaultValue = "0") val favorite: Boolean = false
 ) {
     companion object {
         fun blank() = Item(
@@ -94,6 +96,14 @@ data class Item(
         )
     }
 }
+
+/** The evening reflection: one line about a day, keyed by its epoch day. */
+@Entity(tableName = "reflections")
+data class Reflection(
+    @PrimaryKey val day: Long,
+    val text: String,
+    val at: Long = System.currentTimeMillis()
+)
 
 /** Every Gmail message / calendar event ever evaluated, so it is never processed twice. */
 @Entity(tableName = "processed")
@@ -184,6 +194,32 @@ interface ItemDao {
     @Query("SELECT * FROM items")
     suspend fun allItems(): List<Item>
 
+    /** Finished actions, live, for the widget's layout line (level, streak, today's count). */
+    @Query("SELECT * FROM items WHERE status = 'DONE'")
+    fun doneFlow(): Flow<List<Item>>
+
+    @Query("UPDATE items SET favorite = :on WHERE id = :id")
+    suspend fun setFavorite(id: Long, on: Boolean)
+
+    /** Favourite Thought of the day or God task rows ([source] is THOUGHT or GOD). */
+    @Query("SELECT * FROM items WHERE favorite = 1 AND source = :source")
+    suspend fun favorites(source: String): List<Item>
+
+    @Query("SELECT * FROM reflections")
+    fun reflections(): Flow<List<Reflection>>
+
+    @Query("SELECT * FROM reflections")
+    suspend fun allReflections(): List<Reflection>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveReflection(reflection: Reflection)
+
+    @Query("DELETE FROM reflections WHERE day = :day")
+    suspend fun deleteReflection(day: Long)
+
+    @Query("DELETE FROM reflections")
+    suspend fun deleteAllReflections()
+
     @Query("SELECT COUNT(*) FROM items")
     suspend fun count(): Int
 
@@ -216,9 +252,9 @@ interface ItemDao {
 }
 
 /** Room schema version; also written into Drive backups so restores know where they came from. */
-const val DB_VERSION = 7
+const val DB_VERSION = 8
 
-@Database(entities = [Item::class, Processed::class], version = DB_VERSION, exportSchema = false)
+@Database(entities = [Item::class, Processed::class, Reflection::class], version = DB_VERSION, exportSchema = false)
 abstract class Db : RoomDatabase() {
     abstract fun dao(): ItemDao
 
@@ -254,7 +290,7 @@ abstract class Db : RoomDatabase() {
 
         /** Every upgrade step, oldest first; also used by the upgrade tests. */
         internal val MIGRATIONS: Array<Migration> by lazy {
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
         }
 
         /** Adds the time of day, backfilled with the same work-context rule new actions use. */
@@ -293,6 +329,14 @@ abstract class Db : RoomDatabase() {
         internal val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE items ADD COLUMN sourceRef TEXT")
+            }
+        }
+
+        /** Adds favourites (Thought of the day, God tasks; none to start with) and the evening reflections table. */
+        internal val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS reflections (day INTEGER NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(day))")
             }
         }
 

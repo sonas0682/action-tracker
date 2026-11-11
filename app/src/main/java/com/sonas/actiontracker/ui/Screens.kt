@@ -431,6 +431,19 @@ fun AppScreen(
             else showUndo("New God task: \"${fresh.title}\"") { vm.restore(item) }
         }
     }
+    /** Long-press → Move to tomorrow: this task only (one occurrence of a repeat), with Undo. */
+    val moveTomorrow: (Item) -> Unit = { item ->
+        scope.launch {
+            val moved = item.copy(dueDate = LocalDate.now().plusDays(1).toEpochDay())
+            val snapshot = runCatching { vm.save(item, moved, SeriesScope.THIS) }
+                .getOrElse { vm.message = "Couldn't move \"${item.title}\": ${it.message}"; return@launch }
+            if (item.seriesId != null) withUndo("Moved \"${item.title}\" to tomorrow", snapshot)
+            else showUndo("Moved \"${item.title}\" to tomorrow") { vm.restore(item) }
+        }
+    }
+    var reflecting by remember { mutableStateOf<Long?>(null) }
+    val reflectionList by vm.reflections.collectAsStateWithLifecycle()
+    val reflectionByDay = remember(reflectionList) { reflectionList.associate { it.day to it.text } }
     val saveNow: (Item, Item, SeriesScope) -> Unit = { original, edited, which ->
         scope.launch {
             val snapshot = runCatching { vm.save(original, edited, which) }
@@ -520,6 +533,9 @@ fun AppScreen(
                         HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { index ->
                             if (index >= TAB_CALENDAR) {
                                 InsightsPage(
+                                    layout = LayoutPref.of(DayPage.TODAY),
+                                    reflections = reflectionByDay,
+                                    onReflect = { reflecting = it },
                                     stats = index == TAB_STATS,
                                     actions = actions,
                                     month = monthOf(monthIndex),
@@ -530,16 +546,26 @@ fun AppScreen(
                                 )
                             } else if (index < TAB_SUGGESTED) {
                                 val layout = LayoutPref.of(DayPage.entries[index])
+                                val askReflection = index == 0 &&
+                                    reflectionDue(vm.reflectionOn, java.time.LocalTime.now().hour, reflectionByDay.containsKey(today()))
+                                Column(Modifier.fillMaxSize()) {
+                                Box(Modifier.weight(1f).fillMaxWidth()) {
                                 if (layout != AppLayout.CLASSIC) LayoutPage(
                                     layout, DayPage.entries[index], groupOf(index), dayPages[index], actions, showUpcoming,
                                     onToggleUpcoming = { showUpcoming = !showUpcoming },
-                                    act = RowActions(toggle = { vm.toggleDone(it) }, edit = { editing = it }, delete = deleteWithUndo, replace = replaceGod)
+                                    act = RowActions(
+                                        toggle = { vm.toggleDone(it) }, edit = { editing = it }, delete = deleteWithUndo, replace = replaceGod,
+                                        move = moveTomorrow, favorite = { vm.setFavorite(it, !it.favorite) }
+                                    )
                                 ) else DayPageList(
                                     DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
                                     onToggleUpcoming = { showUpcoming = !showUpcoming },
                                     vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod,
-                                    onOpenContext = { contextPage = it }
+                                    onOpenContext = { contextPage = it }, onMove = moveTomorrow
                                 )
+                                }
+                                if (askReflection) ReflectionBar(onClick = { reflecting = today() })
+                                }
                             } else Column(Modifier.fillMaxSize()) {
                                 // Undo sits in a slim strip above the deck, so it never covers the cards' Skip / Edit / Add buttons.
                                 Box(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
@@ -682,6 +708,13 @@ fun AppScreen(
         )
     }
 
+    reflecting?.let { day ->
+        ReflectionDialog(
+            day, reflectionByDay[day].orEmpty(),
+            onSave = { vm.saveReflection(day, it); reflecting = null },
+            onDismiss = { reflecting = null }
+        )
+    }
     editing?.let { item ->
         EditSheet(
             item,
@@ -1581,7 +1614,8 @@ private fun DayPageList(
     onEdit: (Item) -> Unit,
     onDelete: (Item) -> Unit,
     onReplace: (Item) -> Unit,
-    onOpenContext: (String) -> Unit
+    onOpenContext: (String) -> Unit,
+    onMove: (Item) -> Unit
 ) {
     // Regrouped only when the page's list, grouping or Upcoming toggle changes, not on every recomposition.
     val (upcoming, sections) = remember(actions, group, showUpcoming) { buildSections(actions, group, showUpcoming) }
@@ -1631,7 +1665,8 @@ private fun DayPageList(
                         onToggle = { vm.toggleDone(item) },
                         onEdit = { onEdit(item) },
                         onDelete = { onDelete(item) },
-                        modifier = Modifier.animateItem()
+                        modifier = Modifier.animateItem(),
+                        onFavorite = { vm.setFavorite(item, !item.favorite) }
                     )
                 } else {
                     ActionRow(
@@ -1640,7 +1675,9 @@ private fun DayPageList(
                         onEdit = { onEdit(item) },
                         onDelete = { onDelete(item) },
                         onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
-                        modifier = Modifier.animateItem()
+                        modifier = Modifier.animateItem(),
+                        onMove = if (canMoveToTomorrow(item, today())) ({ onMove(item) }) else null,
+                        onFavorite = if (canFavorite(item)) ({ vm.setFavorite(item, !item.favorite) }) else null
                     )
                 }
             }
@@ -1655,7 +1692,10 @@ private fun DayPageList(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ThoughtRow(item: Item, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ThoughtRow(
+    item: Item, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier,
+    onFavorite: (() -> Unit)? = null
+) {
     val isDone = item.status == STATUS_DONE
     val shape = RoundedCornerShape(18.dp)
     val wash = Brush.linearGradient(
@@ -1706,7 +1746,8 @@ internal fun ThoughtRow(item: Item, onToggle: () -> Unit, onEdit: () -> Unit, on
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (isDone) "$THOUGHT_MARK  THOUGHT OF THE DAY · READ" else "$THOUGHT_MARK  THOUGHT OF THE DAY",
+                        (if (isDone) "$THOUGHT_MARK  THOUGHT OF THE DAY · READ" else "$THOUGHT_MARK  THOUGHT OF THE DAY") +
+                            if (item.favorite) "  ★" else "",
                         style = MaterialTheme.typography.labelSmall.copy(brush = Fresh.accentHorizontal, letterSpacing = 1.2.sp)
                     )
                     Spacer(Modifier.height(4.dp))
@@ -1723,6 +1764,13 @@ internal fun ThoughtRow(item: Item, onToggle: () -> Unit, onEdit: () -> Unit, on
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (onFavorite != null) {
+                DropdownMenuItem(
+                    text = { Text(if (item.favorite) "Remove favorite" else "Favorite") },
+                    leadingIcon = { Text("★", color = Fresh.Gold) },
+                    onClick = { menu = false; onFavorite() }
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Delete") },
                 leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fresh.Coral) },
@@ -1797,7 +1845,9 @@ private fun ActionRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onReplace: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onMove: (() -> Unit)? = null,
+    onFavorite: (() -> Unit)? = null
 ) {
     val isDone = item.status == STATUS_DONE
     val god = GodTasks.isGod(item)
@@ -1819,7 +1869,8 @@ private fun ActionRow(
             Column(Modifier.weight(1f)) {
                 if (god) {
                     Text(
-                        GodTasks.themeOf(item)?.let { "$GOD_LAMP  GOD TASK  ·  ${it.label.uppercase()}" } ?: "$GOD_LAMP  GOD TASK",
+                        (GodTasks.themeOf(item)?.let { "$GOD_LAMP  GOD TASK  ·  ${it.label.uppercase()}" } ?: "$GOD_LAMP  GOD TASK") +
+                            if (item.favorite) "  ★" else "",
                         style = MaterialTheme.typography.labelSmall,
                         color = Fresh.Gold
                     )
@@ -1864,6 +1915,20 @@ private fun ActionRow(
             TimeIcon(TimeOfDay.of(item.timeOfDay))
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (onMove != null) {
+                DropdownMenuItem(
+                    text = { Text("Move to tomorrow") },
+                    leadingIcon = { Text("→", color = Fresh.Indigo) },
+                    onClick = { menu = false; onMove() }
+                )
+            }
+            if (onFavorite != null) {
+                DropdownMenuItem(
+                    text = { Text(if (item.favorite) "Remove favorite" else "Favorite") },
+                    leadingIcon = { Text("★", color = Fresh.Gold) },
+                    onClick = { menu = false; onFavorite() }
+                )
+            }
             if (onReplace != null) {
                 DropdownMenuItem(
                     text = { Text("Another God task") },
@@ -2397,7 +2462,8 @@ private fun ContextScreen(
                             onToggle = { vm.toggleDone(item) },
                             onEdit = { onEdit(item) },
                             onDelete = { onDelete(item) },
-                            modifier = Modifier.animateItem()
+                            modifier = Modifier.animateItem(),
+                            onFavorite = { vm.setFavorite(item, !item.favorite) }
                         )
                     } else {
                         // Grouped by date already and all one context, so rows name the person and due day.
@@ -2407,7 +2473,8 @@ private fun ContextScreen(
                             onEdit = { onEdit(item) },
                             onDelete = { onDelete(item) },
                             onReplace = if (GodTasks.isGod(item) && item.status == STATUS_OPEN) ({ onReplace(item) }) else null,
-                            modifier = Modifier.animateItem()
+                            modifier = Modifier.animateItem(),
+                            onFavorite = if (canFavorite(item)) ({ vm.setFavorite(item, !item.favorite) }) else null
                         )
                     }
                 }

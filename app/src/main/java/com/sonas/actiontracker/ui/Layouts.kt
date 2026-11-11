@@ -43,6 +43,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,7 +95,9 @@ import com.sonas.actiontracker.sync.ThoughtTasks
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import com.sonas.actiontracker.widget.DueWidget
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -111,6 +115,15 @@ object LayoutPref {
         private set
 
     fun of(page: DayPage): AppLayout = byPage[page] ?: AppLayout.CLASSIC
+
+    /** [page]'s layout straight from the prefs, for the widget and reminders (no Compose state). */
+    fun read(context: Context, page: DayPage): AppLayout {
+        val p = prefs(context)
+        return AppLayout.of(p.getString(key(page), null) ?: p.getString(KEY, null))
+    }
+
+    /** The prefs key holding [page]'s layout, for the widget's change listener. */
+    fun keyOf(page: DayPage): String = key(page)
 
     fun load(context: Context) {
         val p = prefs(context)
@@ -134,7 +147,9 @@ internal class RowActions(
     val toggle: (Item) -> Unit,
     val edit: (Item) -> Unit,
     val delete: (Item) -> Unit,
-    val replace: (Item) -> Unit
+    val replace: (Item) -> Unit,
+    val move: (Item) -> Unit,
+    val favorite: (Item) -> Unit
 )
 
 private val LAY_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
@@ -196,7 +211,7 @@ internal fun LayoutPage(
     val haptic = LocalHapticFeedback.current
     val acts = RowActions(
         toggle = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); act.toggle(it) },
-        edit = act.edit, delete = act.delete, replace = act.replace
+        edit = act.edit, delete = act.delete, replace = act.replace, move = act.move, favorite = act.favorite
     )
     val up = Upcoming(upcoming, showUpcoming, onToggleUpcoming)
     val data = PageData(page, sections, tasks, thoughts, shown, today, allDone(shown), up)
@@ -292,6 +307,20 @@ private fun RowMenuBox(item: Item, act: RowActions, modifier: Modifier = Modifie
     ) {
         content()
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (canMoveToTomorrow(item, LocalDate.now().toEpochDay())) {
+                DropdownMenuItem(
+                    text = { Text("Move to tomorrow") },
+                    leadingIcon = { Text("→", color = Fresh.Indigo) },
+                    onClick = { menu = false; act.move(item) }
+                )
+            }
+            if (canFavorite(item)) {
+                DropdownMenuItem(
+                    text = { Text(if (item.favorite) "Remove favorite" else "Favorite") },
+                    leadingIcon = { Text("★", color = Fresh.Gold) },
+                    onClick = { menu = false; act.favorite(item) }
+                )
+            }
             if (canReplace) {
                 DropdownMenuItem(
                     text = { Text("Another God task") },
@@ -355,7 +384,7 @@ private fun TitleText(
     style: FontStyle? = null
 ) {
     Text(
-        item.title,
+        if (item.favorite) "★ ${item.title}" else item.title,
         modifier = modifier,
         fontSize = sizeSp.sp,
         fontWeight = FontWeight.Medium,
@@ -1003,6 +1032,7 @@ private fun MetroStop(item: Item, today: Long, act: RowActions) {
 @Composable
 internal fun LayoutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
+    val refresh = rememberCoroutineScope()
     // null = all pages.
     var scopeName by remember { mutableStateOf<String?>(null) }
     val scope = DayPage.entries.firstOrNull { it.name == scopeName }
@@ -1039,7 +1069,11 @@ internal fun LayoutDialog(onDismiss: () -> Unit) {
                 AppLayout.entries.forEach { option ->
                     Row(
                         Modifier.fillMaxWidth().heightIn(min = 64.dp)
-                            .clickable(role = Role.RadioButton) { LayoutPref.set(context, scope, option) },
+                            .clickable(role = Role.RadioButton) {
+                                LayoutPref.set(context, scope, option)
+                                // The widget's title line follows Now's layout.
+                                refresh.launch { runCatching { DueWidget.refresh(context) } }
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(selected = current == option, onClick = null)
@@ -1139,6 +1173,122 @@ private fun LayoutThumb(layout: AppLayout) {
                     drawCircle(dark, w * 0.09f, Offset(x, y), style = Stroke(thin))
                     drawLine(ink, Offset(w * 0.48f, y), Offset(w * 0.86f, y), thin)
                 }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Evening reflection
+
+/** The slim bar above the dock on Now, from 7 PM until the day's line is written. */
+@Composable
+internal fun ReflectionBar(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).heightIn(min = 44.dp)
+            .glass(shape, strong = true).clickable(onClickLabel = "Write today's reflection", onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(THOUGHT_MARK, color = Fresh.Indigo, fontSize = 16.sp)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            "What went well today?", fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp,
+            color = Fresh.Text, modifier = Modifier.weight(1f)
+        )
+        Text("Write", style = MaterialTheme.typography.labelLarge, color = Fresh.Indigo)
+    }
+}
+
+/** One line about [day]; saving it empty removes it. */
+@Composable
+internal fun ReflectionDialog(day: Long, initial: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember(day) { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (day == LocalDate.now().toEpochDay()) "What went well today?" else "About ${layDate(day)}") },
+        text = {
+            OutlinedTextField(
+                value = text, onValueChange = { text = it.take(280) },
+                placeholder = { Text("One line is enough") },
+                minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Calendar's line under the picked day: its reflection, or an invitation to write one (not for days ahead). */
+@Composable
+internal fun ReflectionLine(day: Long, text: String?, onClick: () -> Unit) {
+    if (text == null && day > LocalDate.now().toEpochDay()) return
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp))
+            .clickable(onClickLabel = "Edit this day's reflection", onClick = onClick).padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(THOUGHT_MARK, color = Fresh.Indigo, fontSize = 14.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text ?: "Add a line about this day",
+            fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontSize = 14.sp,
+            color = if (text == null) Fresh.TextDim else Fresh.Text, modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+// ---------------------------------------------------------------- Stats in the layout's style
+
+/** The Stats page's opening card, written and coloured like the Now page's layout (nothing for Classic). */
+@Composable
+internal fun LayoutStatsCard(layout: AppLayout, actions: List<Item>, month: java.time.YearMonth, reflectionDays: Set<Long>) {
+    val today = LocalDate.now().toEpochDay()
+    val lines = remember(layout, actions, month, today, reflectionDays) {
+        layoutStatLines(layout, actions, month, today, reflectionDays)
+    } ?: return
+    val shape = RoundedCornerShape(18.dp)
+    val ground = when (layout) {
+        AppLayout.QUEST -> Fresh.QuestNight
+        AppLayout.JOURNAL -> Fresh.Paper
+        else -> Fresh.GlassStrong
+    }
+    val head = when (layout) {
+        AppLayout.QUEST -> Fresh.QuestGold
+        AppLayout.JOURNAL -> Fresh.PaperInk
+        else -> Fresh.Indigo
+    }
+    val body = if (layout == AppLayout.QUEST) Fresh.QuestText else Fresh.Text
+    val family = when (layout) {
+        AppLayout.LEDGER -> MONO
+        AppLayout.JOURNAL -> HAND
+        else -> null
+    }
+    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(shape).background(ground).border(1.dp, Fresh.Rim, shape).padding(16.dp)) {
+        Text(lines.first, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = if (layout == AppLayout.JOURNAL) 22.sp else 16.sp, color = head)
+        Spacer(Modifier.height(6.dp))
+        lines.second.forEach { line ->
+            Text(line, fontFamily = family, fontSize = if (layout == AppLayout.JOURNAL) 18.sp else 14.sp, color = body)
+        }
+    }
+}
+
+/** Milestones on the Stats page: earned ones in gold, the rest dimmed with what they take. */
+@Composable
+internal fun MilestonesCard(actions: List<Item>) {
+    val today = LocalDate.now().toEpochDay()
+    val all = remember(actions, today) { badges(actions, today) }
+    val shape = RoundedCornerShape(18.dp)
+    Column(Modifier.fillMaxWidth().glass(shape).padding(horizontal = 16.dp, vertical = 10.dp)) {
+        all.forEach { badge ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (badge.earned) "★" else "☆", fontSize = 18.sp, color = if (badge.earned) Fresh.Gold else Fresh.TextDim)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(badge.name, style = MaterialTheme.typography.titleSmall, color = if (badge.earned) Fresh.Text else Fresh.TextDim)
+                    Text(badge.detail, style = MaterialTheme.typography.labelMedium, color = Fresh.TextDim)
+                }
+                if (badge.earned) Text("Earned", style = MaterialTheme.typography.labelMedium, color = Fresh.Gold)
             }
         }
     }

@@ -10,6 +10,24 @@ import com.sonas.actiontracker.ui.DayPage
 import com.sonas.actiontracker.ui.Group
 import com.sonas.actiontracker.ui.LedgerFilter
 import com.sonas.actiontracker.ui.allDone
+import com.sonas.actiontracker.ui.badges
+import com.sonas.actiontracker.ui.canFavorite
+import com.sonas.actiontracker.ui.canMoveToTomorrow
+import com.sonas.actiontracker.ui.dialParts
+import com.sonas.actiontracker.ui.digestHeading
+import com.sonas.actiontracker.ui.layoutStatLines
+import com.sonas.actiontracker.ui.longestStreak
+import com.sonas.actiontracker.ui.reflectionDue
+import com.sonas.actiontracker.ui.slotHeading
+import com.sonas.actiontracker.ui.widgetTitle
+import com.sonas.actiontracker.data.Thoughts
+import com.sonas.actiontracker.sync.GodTasks
+import com.sonas.actiontracker.data.GodTheme
+import com.sonas.actiontracker.sync.GoogleAuth
+import org.junit.Assert.assertNull
+import java.time.LocalDate
+import java.time.YearMonth
+import kotlin.random.Random
 import com.sonas.actiontracker.ui.dialAngle
 import com.sonas.actiontracker.ui.finaleLine
 import com.sonas.actiontracker.ui.layoutSummary
@@ -185,5 +203,99 @@ class LayoutLogicTest {
             item("old", done = true, completedAt = (today - 1) * dayMs)
         )
         assertEquals(Quest.TASK_XP + Quest.GOD_XP, Quest.xpOn(items, today, ZoneOffset.UTC))
+    }
+
+    private val dayMs = 86_400_000L
+
+    @Test fun remindersSpeakInTheLayoutsVoice() {
+        assertNull(slotHeading(AppLayout.CLASSIC, TimeOfDay.EVENING, 3, 60))
+        assertEquals("🌇 3 stops left on the evening line", slotHeading(AppLayout.METRO, TimeOfDay.EVENING, 3, 60))
+        assertEquals("🌇 1 evening step left · 20 XP waiting", slotHeading(AppLayout.QUEST, TimeOfDay.EVENING, 1, 20))
+        assertNull(digestHeading(AppLayout.CLASSIC, 5, 1))
+        assertEquals("Today's quest: 5 steps, 1 late", digestHeading(AppLayout.QUEST, 5, 1))
+        assertEquals("Today's line: 1 stop", digestHeading(AppLayout.METRO, 1, 0))
+    }
+
+    @Test fun widgetTitleFollowsTheLayout() {
+        val open = listOf(item("night", time = TimeOfDay.NIGHT), item("late", due = today - 1, time = TimeOfDay.AFTERNOON))
+        val done = listOf(item("a", done = true, time = TimeOfDay.AFTERNOON, completedAt = today * dayMs + 5))
+        assertEquals("Actions", widgetTitle(AppLayout.CLASSIC, open, done, today, ZoneOffset.UTC))
+        assertEquals("Open 2 · Late 1 · Done 1", widgetTitle(AppLayout.LEDGER, open, done, today, ZoneOffset.UTC))
+        assertEquals("Level 1 · 1 day streak", widgetTitle(AppLayout.QUEST, open, done, today, ZoneOffset.UTC))
+        assertEquals("1 / 3 done", widgetTitle(AppLayout.DIAL, open, done, today, ZoneOffset.UTC))
+        assertEquals("Next stop: late", widgetTitle(AppLayout.METRO, open, done, today, ZoneOffset.UTC))
+        assertEquals("End of the line", widgetTitle(AppLayout.METRO, emptyList(), done, today, ZoneOffset.UTC))
+        assertEquals(listOf(0f, 0.5f, 0f, 0f), dialParts(open, done, today, ZoneOffset.UTC))
+    }
+
+    @Test fun longestStreakFindsTheBestRun() {
+        assertEquals(0, longestStreak(emptySet()))
+        assertEquals(3, longestStreak(setOf(1L, 2L, 3L, 7L, 8L)))
+    }
+
+    @Test fun badgesAreEarnedFromHistory() {
+        val none = badges(emptyList(), today, ZoneOffset.UTC)
+        assertTrue(none.none { it.earned })
+        val week = (0L..6L).map { item("d$it", due = today - it, done = true, completedAt = (today - it) * dayMs + 1) }
+        val earned = badges(week, today, ZoneOffset.UTC).filter { it.earned }.map { it.name }
+        assertEquals(listOf("First Step", "Week of Fire", "On-Time Week"), earned)
+        val withLate = badges(week + item("late", due = today - 1), today, ZoneOffset.UTC).filter { it.earned }.map { it.name }
+        assertEquals(listOf("First Step", "Week of Fire"), withLate)
+    }
+
+    @Test fun monthCardSpeaksInTheLayout() {
+        val month = YearMonth.from(LocalDate.ofEpochDay(today))
+        val items = listOf(item("a", done = true, completedAt = today * dayMs + 1), item("b"))
+        assertNull(layoutStatLines(AppLayout.CLASSIC, items, month, today, emptySet(), ZoneOffset.UTC))
+        val ledger = layoutStatLines(AppLayout.LEDGER, items, month, today, emptySet(), ZoneOffset.UTC)!!
+        assertEquals("MONTH STATEMENT", ledger.first)
+        assertEquals(listOf("OPENED   2", "CLOSED   1", "CARRIED  0", "RATE     50%"), ledger.second)
+        val journal = layoutStatLines(AppLayout.JOURNAL, items, month, today, setOf(today), ZoneOffset.UTC)!!
+        assertEquals(listOf("1 evenings written", "1 lines crossed off"), journal.second)
+    }
+
+    @Test fun longPressOffersMoveAndFavoriteOnlyWhereTheyFit() {
+        assertTrue(canMoveToTomorrow(item("a"), today))
+        assertTrue(canMoveToTomorrow(item("late", due = today - 2), today))
+        assertFalse(canMoveToTomorrow(item("tomorrow", due = today + 1), today))
+        assertFalse(canMoveToTomorrow(item("done", done = true), today))
+        assertFalse(canMoveToTomorrow(item("god", source = SOURCE_GOD), today))
+        assertTrue(canFavorite(item("god", source = SOURCE_GOD)))
+        assertTrue(canFavorite(item("thought", source = "THOUGHT")))
+        assertFalse(canFavorite(item("plain")))
+    }
+
+    @Test fun reflectionIsAskedInTheEveningUntilWritten() {
+        assertTrue(reflectionDue(true, 19, false))
+        assertFalse(reflectionDue(true, 18, false))
+        assertFalse(reflectionDue(true, 21, true))
+        assertFalse(reflectionDue(false, 21, false))
+    }
+
+    @Test fun signInWarningComesOnceOnTheLastDay() {
+        val granted = 1_000L
+        assertFalse(GoogleAuth.signInWarningDue(0L, 0L, 10 * dayMs))
+        assertFalse(GoogleAuth.signInWarningDue(granted, 0L, granted + 5 * dayMs))
+        assertTrue(GoogleAuth.signInWarningDue(granted, 0L, granted + 6 * dayMs))
+        assertFalse(GoogleAuth.signInWarningDue(granted, granted, granted + 6 * dayMs))
+    }
+
+    @Test fun favoriteThoughtsComeBackButNeverTwiceRunning() {
+        assertEquals(setOf(0), Thoughts.indexesOf(listOf(Thoughts.all[0].text, "not a thought")))
+        val random = Random(42)
+        val picks = (1..200).map { Thoughts.next(5, random, favorites = setOf(5, 9)) }
+        assertFalse(5 in picks)
+        assertTrue(picks.count { it == 9 } > 20)
+    }
+
+    @Test fun favoriteGodTasksMayRepeatSooner() {
+        val theme = GodTheme.entries.first()
+        // Every task was used 20 days ago: none is fresh, unless it is a favourite (14-day wait).
+        val used = theme.tasks.indices.associate { GodTasks.key(theme, it) to today - 20 }
+        val favorite = GodTasks.key(theme, 3)
+        assertEquals(3, GodTasks.pickIndex(theme, used, today, Random(1), setOf(favorite)))
+        val row = item(theme.tasks[3].replace("{name}", "Me"), source = SOURCE_GOD).copy(sourceRef = theme.name)
+        assertEquals(favorite, GodTasks.keyOf(row))
+        assertNull(GodTasks.keyOf(row.copy(title = "edited by hand")))
     }
 }

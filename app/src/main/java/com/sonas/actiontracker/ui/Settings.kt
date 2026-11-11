@@ -139,6 +139,14 @@ internal fun SettingsScreen(
                         checked = vm.showThought,
                         onChange = vm::setShowThought
                     )
+                    SettingDivider()
+                    SettingSwitch(
+                        icon = { IconBadge(Fresh.Teal) { Text(THOUGHT_MARK, color = Fresh.Teal, style = MaterialTheme.typography.titleMedium) } },
+                        title = "Evening reflection",
+                        summary = "One line about the day, asked on Now from 7 PM",
+                        checked = vm.reflectionOn,
+                        onChange = vm::setReflection
+                    )
                 }
             }
             item(key = "look") {

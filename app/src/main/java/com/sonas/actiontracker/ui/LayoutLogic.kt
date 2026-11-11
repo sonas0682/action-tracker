@@ -199,3 +199,180 @@ object Quest {
         return count
     }
 }
+
+// ---------------------------------------------------------------- reminders in the layout's voice
+
+private fun plural(n: Int, one: String, many: String) = if (n == 1) one else many
+
+/**
+ * A time-of-day pop-up's title in [layout]'s words ([xp] is what the listed tasks are worth), or
+ * null for Classic, which keeps the plain "3 evening actions still open".
+ */
+fun slotHeading(layout: AppLayout, slot: TimeOfDay, count: Int, xp: Int): String? {
+    val name = slot.label.lowercase()
+    return when (layout) {
+        AppLayout.CLASSIC -> null
+        AppLayout.LEDGER -> "${slot.emoji} ${slot.label}: $count open ${plural(count, "item", "items")}"
+        AppLayout.QUEST -> "${slot.emoji} $count $name ${plural(count, "step", "steps")} left · $xp XP waiting"
+        AppLayout.DIAL -> "${slot.emoji} ${slot.label} ring: $count to close"
+        AppLayout.JOURNAL -> "${slot.emoji} $count $name ${plural(count, "line", "lines")} to cross off"
+        AppLayout.METRO -> "${slot.emoji} $count ${plural(count, "stop", "stops")} left on the $name line"
+    }
+}
+
+/** The 8 AM digest's title in [layout]'s words ([total] includes the [overdue] ones), or null for Classic. */
+fun digestHeading(layout: AppLayout, total: Int, overdue: Int): String? {
+    val late = if (overdue > 0) ", $overdue late" else ""
+    return when (layout) {
+        AppLayout.CLASSIC -> null
+        AppLayout.LEDGER -> "Opening balance: $total open$late"
+        AppLayout.QUEST -> "Today's quest: $total ${plural(total, "step", "steps")}$late"
+        AppLayout.DIAL -> "Today's ring: $total to close$late"
+        AppLayout.JOURNAL -> "Today's page: $total ${plural(total, "line", "lines")}$late"
+        AppLayout.METRO -> "Today's line: $total ${plural(total, "stop", "stops")}$late"
+    }
+}
+
+// ---------------------------------------------------------------- widget title
+
+private fun Item.doneOn(day: Long, zone: ZoneId): Boolean =
+    status == STATUS_DONE && completedAt?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate().toEpochDay() } == day
+
+/**
+ * The widget's one title line in the Now page's layout, in place of "Actions": [open] is what is
+ * open today or late, [done] every finished action.
+ */
+fun widgetTitle(layout: AppLayout, open: List<Item>, done: List<Item>, today: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    val doneToday = done.count { it.doneOn(today, zone) }
+    return when (layout) {
+        AppLayout.CLASSIC -> "Actions"
+        AppLayout.LEDGER -> "Open ${open.size} · Late ${open.count { it.dueDate < today }} · Done $doneToday"
+        AppLayout.QUEST -> {
+            val level = Quest.levelOf(Quest.totalXp(done))
+            val streak = Quest.streak(Quest.doneDays(done, zone), today)
+            "Level $level · $streak day streak"
+        }
+        AppLayout.DIAL -> "$doneToday / ${doneToday + open.size} done"
+        AppLayout.JOURNAL -> "$doneToday crossed off, ${open.size} to go"
+        AppLayout.METRO -> open.minByOrNull { TimeOfDay.of(it.timeOfDay).ordinal }?.let { "Next stop: ${it.title}" } ?: "End of the line"
+    }
+}
+
+/** The share of each time of day closed today (0..1), Morning to Night, for the widget's little ring. */
+fun dialParts(open: List<Item>, done: List<Item>, today: Long, zone: ZoneId = ZoneId.systemDefault()): List<Float> {
+    val doneToday = done.filter { it.doneOn(today, zone) }
+    return TimeOfDay.entries.map { slot ->
+        val closed = doneToday.count { TimeOfDay.of(it.timeOfDay) == slot }
+        val total = closed + open.count { TimeOfDay.of(it.timeOfDay) == slot }
+        if (total == 0) 0f else closed.toFloat() / total
+    }
+}
+
+// ---------------------------------------------------------------- milestones and month cards
+
+/** A milestone on the Stats page, worked out from stored actions. */
+data class Badge(val name: String, val detail: String, val earned: Boolean)
+
+/** The longest run of days in a row in [days]. */
+fun longestStreak(days: Set<Long>): Int {
+    var best = 0
+    for (day in days) {
+        if (day - 1 in days) continue
+        var length = 1
+        while (day + length in days) length++
+        if (length > best) best = length
+    }
+    return best
+}
+
+/** Every milestone, earned or not, in a fixed order. */
+fun badges(items: List<Item>, today: Long, zone: ZoneId = ZoneId.systemDefault()): List<Badge> {
+    val done = items.filter { it.status == STATUS_DONE }
+    val best = longestStreak(Quest.doneDays(items, zone))
+    val god = done.count { it.source == SOURCE_GOD }
+    val thoughts = done.count { it.source == "THOUGHT" }
+    val week = done.filter { item ->
+        item.completedAt?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate().toEpochDay() }?.let { it > today - 7 } == true
+    }
+    val onTime = week.size >= 5 && items.none { it.isLate(today) } && week.none { item ->
+        Instant.ofEpochMilli(item.completedAt ?: 0L).atZone(zone).toLocalDate().toEpochDay() > item.dueDate
+    }
+    return listOf(
+        Badge("First Step", "Finish one task", done.isNotEmpty()),
+        Badge("Week of Fire", "7 days in a row · best $best", best >= 7),
+        Badge("Month of Fire", "30 days in a row", best >= 30),
+        Badge("Centurion", "100 tasks done · ${done.size}", done.size >= 100),
+        Badge("Lamp Keeper", "10 God tasks done · $god", god >= 10),
+        Badge("Deep Reader", "30 thoughts read · $thoughts", thoughts >= 30),
+        Badge("On-Time Week", "5+ done this week, none late", onTime)
+    )
+}
+
+/**
+ * The Stats page's opening card in [layout]'s words: a title and a few lines about [month]
+ * ([reflectionDays] are the epoch days with an evening reflection). Null for Classic.
+ */
+fun layoutStatLines(
+    layout: AppLayout, items: List<Item>, month: java.time.YearMonth, today: Long,
+    reflectionDays: Set<Long>, zone: ZoneId = ZoneId.systemDefault()
+): Pair<String, List<String>>? {
+    val first = month.atDay(1).toEpochDay()
+    val last = month.atEndOfMonth().toEpochDay()
+    val due = items.filter { it.dueDate in first..last }
+    val closed = due.count { it.status == STATUS_DONE }
+    val doneInMonth = items.filter { item ->
+        item.status == STATUS_DONE &&
+            (item.completedAt?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate().toEpochDay() } ?: item.dueDate) in first..last
+    }
+    return when (layout) {
+        AppLayout.CLASSIC -> null
+        AppLayout.LEDGER -> "MONTH STATEMENT" to listOf(
+            "OPENED   ${due.size}",
+            "CLOSED   $closed",
+            "CARRIED  ${due.count { it.isLate(today) }}",
+            "RATE     ${if (due.isEmpty()) 0 else closed * 100 / due.size}%"
+        )
+        AppLayout.QUEST -> {
+            val xp = Quest.totalXp(items)
+            val level = Quest.levelOf(xp)
+            "Level $level · ${Quest.title(level)}" to listOf(
+                "$xp XP in all, ${Quest.xpToReach(level + 1) - xp} to the next level",
+                "+${doneInMonth.sumOf { Quest.xpFor(it) }} XP this month",
+                "Best streak: ${longestStreak(Quest.doneDays(items, zone))} days"
+            )
+        }
+        AppLayout.DIAL -> {
+            val byDay = due.filter { it.dueDate <= today }.groupBy { it.dueDate }
+            "Rings closed" to listOf(
+                "${byDay.count { (_, list) -> list.all { it.status == STATUS_DONE } }} of ${byDay.size} days fully closed",
+                "${doneInMonth.size} tasks closed this month"
+            )
+        }
+        AppLayout.JOURNAL -> "This month's pages" to listOf(
+            "${reflectionDays.count { it in first..last }} evenings written",
+            "${doneInMonth.size} lines crossed off"
+        )
+        AppLayout.METRO -> {
+            val busiest = doneInMonth.groupingBy { it.context }.eachCount().maxByOrNull { it.value }
+            "Trips this month" to listOfNotNull(
+                "${doneInMonth.size} stops made",
+                busiest?.let { "Busiest line: ${it.key} (${it.value})" }
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- evening reflection
+
+/** The hour from which Now offers the evening reflection. */
+const val REFLECTION_FROM_HOUR = 19
+
+/** Whether Now shows the "What went well today?" bar: switched on, evening, and not written yet. */
+fun reflectionDue(enabled: Boolean, hour: Int, written: Boolean): Boolean = enabled && hour >= REFLECTION_FROM_HOUR && !written
+
+/** Whether long-press offers "Move to tomorrow": an open, ordinary task due today or earlier. */
+fun canMoveToTomorrow(item: Item, today: Long): Boolean =
+    item.status == STATUS_OPEN && item.dueDate <= today && item.source != SOURCE_GOD && item.source != "THOUGHT"
+
+/** Whether long-press offers Favorite: a Thought of the day or a God task. */
+fun canFavorite(item: Item): Boolean = item.source == SOURCE_GOD || item.source == "THOUGHT"

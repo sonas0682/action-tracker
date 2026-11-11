@@ -1,5 +1,13 @@
 package com.sonas.actiontracker.widget
 
+import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.RectF
+import com.sonas.actiontracker.ui.AppLayout
+import com.sonas.actiontracker.ui.DayPage
+import com.sonas.actiontracker.ui.LayoutPref
+import com.sonas.actiontracker.ui.dialParts
+import com.sonas.actiontracker.ui.widgetTitle
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
@@ -85,8 +93,13 @@ class DueWidget : GlanceAppWidget() {
             val showTomorrow by dayFlow.collectAsState(DayChoice.showTomorrow(context))
             val themeFlow = remember { ThemeChoice.flow(context) }
             val theme by themeFlow.collectAsState(ThemePref.read(context))
+            // The title line follows the Now page's layout; finished actions feed its level, streak and ring.
+            val layoutFlow = remember { LayoutChoice.flow(context) }
+            val layout by layoutFlow.collectAsState(LayoutPref.read(context, DayPage.TODAY))
+            val doneFlow = remember { dao.doneFlow() }
+            val done by doneFlow.collectAsState(emptyList())
             CompositionLocalProvider(LocalThemeMode provides theme) {
-                Content(items, today, showTomorrow)
+                Content(items, today, showTomorrow, layout, done)
             }
         }
     }
@@ -133,6 +146,43 @@ private object ThemeChoice {
         p.registerOnSharedPreferenceChangeListener(listener)
         awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+}
+
+/** The Now page's layout ("ui" prefs, see [LayoutPref]), watched so the widget's title line follows it. */
+private object LayoutChoice {
+    fun flow(context: Context): Flow<AppLayout> = callbackFlow {
+        val p = context.getSharedPreferences("ui", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == LayoutPref.keyOf(DayPage.TODAY)) trySend(LayoutPref.read(context, DayPage.TODAY))
+        }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+}
+
+/** Day Dial's four arcs (Morning at the top right, clockwise), each filled by its share in [parts]. */
+private fun dialBitmap(parts: List<Float>, px: Int = 96): Bitmap {
+    val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = px * 0.16f
+        strokeCap = Paint.Cap.ROUND
+    }
+    val box = RectF(px * 0.12f, px * 0.12f, px * 0.88f, px * 0.88f)
+    // Morning amber, Afternoon sky, Evening coral, Night indigo; readable on the light and dark card.
+    val colors = intArrayOf(0xFFE59A1A.toInt(), 0xFF2F9BEA.toInt(), 0xFFEA5458.toInt(), 0xFF6C70F2.toInt())
+    for (i in 0..3) {
+        val start = -90f + i * 90f + 12f
+        paint.color = 0x559EA2C2
+        canvas.drawArc(box, start, 66f, false, paint)
+        val part = parts.getOrElse(i) { 0f }
+        if (part > 0f) {
+            paint.color = colors[i]
+            canvas.drawArc(box, start, 66f * part, false, paint)
+        }
+    }
+    return bitmap
 }
 
 private val ItemIdKey = ActionParameters.Key<Long>("item_id")
@@ -192,7 +242,7 @@ private fun c(shade: Shade): ColorProvider = when (LocalThemeMode.current) {
 private val DayLabel = DateTimeFormatter.ofPattern("EEE, MMM d")
 
 @Composable
-private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean) {
+private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean, layout: AppLayout, done: List<Item>) {
     val open = actionStartActivity<MainActivity>()
     val today = items.filter { it.dueDate <= epochDay }
     val tomorrow = items.filter { it.dueDate == epochDay + 1 }
@@ -208,11 +258,16 @@ private fun Content(items: List<Item>, epochDay: Long, showTomorrow: Boolean) {
             .padding(12.dp)
     ) {
         Row(modifier = GlanceModifier.fillMaxWidth().clickable(open), verticalAlignment = Alignment.CenterVertically) {
+            if (layout == AppLayout.DIAL) {
+                Image(ImageProvider(dialBitmap(dialParts(today, done, epochDay))), contentDescription = null, modifier = GlanceModifier.size(22.dp))
+                Spacer(GlanceModifier.width(6.dp))
+            }
             Text(
-                "Actions",
+                widgetTitle(layout, today, done, epochDay), maxLines = 1,
                 modifier = GlanceModifier.defaultWeight(),
-                style = TextStyle(color = c(W.Text), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                style = TextStyle(color = c(W.Text), fontSize = if (layout == AppLayout.CLASSIC) 16.sp else 14.sp, fontWeight = FontWeight.Bold)
             )
+            Spacer(GlanceModifier.width(6.dp))
             Text(
                 LocalDate.ofEpochDay(if (showTomorrow) epochDay + 1 else epochDay).format(DayLabel),
                 style = TextStyle(color = c(W.TextDim), fontSize = 12.sp, fontWeight = FontWeight.Medium)
