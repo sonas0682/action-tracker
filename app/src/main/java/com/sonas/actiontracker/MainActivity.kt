@@ -44,6 +44,7 @@ import com.sonas.actiontracker.sync.SyncWorker
 import com.sonas.actiontracker.ui.AppScreen
 import com.sonas.actiontracker.ui.AppTheme
 import com.sonas.actiontracker.ui.Fresh
+import com.sonas.actiontracker.ui.LayoutPref
 import com.sonas.actiontracker.ui.ThemePref
 import com.sonas.actiontracker.ui.BackupDialog
 import com.sonas.actiontracker.ui.LockScreen
@@ -101,6 +102,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Light, Dark or System (default): pick the bars and window colour before the first frame.
         ThemePref.load(this)
+        LayoutPref.load(this)
         applySystemBars(ThemePref.isDark(this, ThemePref.mode))
         super.onCreate(savedInstanceState)
         // After a crash, show only the saved trace: the normal start-up may be what crashes.

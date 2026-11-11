@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -80,6 +81,7 @@ internal fun SettingsScreen(
     var reminders by remember { mutableStateOf(false) }
     var godTask by remember { mutableStateOf(false) }
     var permissions by remember { mutableStateOf(false) }
+    var layouts by remember { mutableStateOf(false) }
     // Bumped when a dialog closes or the app comes back to the front, so the summaries re-read.
     var tick by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tick++ }
@@ -137,6 +139,14 @@ internal fun SettingsScreen(
                         checked = vm.showThought,
                         onChange = vm::setShowThought
                     )
+                    SettingDivider()
+                    SettingSwitch(
+                        icon = { IconBadge(Fresh.Teal) { Text(THOUGHT_MARK, color = Fresh.Teal, style = MaterialTheme.typography.titleMedium) } },
+                        title = "Evening reflection",
+                        summary = "One line about the day, asked on Now from 7 PM",
+                        checked = vm.reflectionOn,
+                        onChange = vm::setReflection
+                    )
                 }
             }
             item(key = "look") {
@@ -150,6 +160,13 @@ internal fun SettingsScreen(
                         Text("Theme", style = MaterialTheme.typography.titleSmall, color = Fresh.Text, modifier = Modifier.weight(1f))
                         ThemeSwitcher(ThemePref.mode, vm::setThemeMode)
                     }
+                    SettingDivider()
+                    SettingRow(
+                        icon = { IconBadge(Fresh.Indigo) { Icon(Icons.Rounded.Menu, null, tint = Fresh.Indigo, modifier = Modifier.size(20.dp)) } },
+                        title = "Layout",
+                        summary = layoutSummary(LayoutPref.of(DayPage.TODAY), LayoutPref.of(DayPage.TOMORROW), LayoutPref.of(DayPage.LATER)),
+                        onClick = { layouts = true }
+                    )
                 }
             }
             item(key = "privacy") {
@@ -191,6 +208,7 @@ internal fun SettingsScreen(
 
     if (reminders) RemindersDialog(onDismiss = { reminders = false; tick++ })
     if (godTask) GodTaskDialog(onPick = vm::setGodTheme, onCounts = vm::setGodCounts, onDismiss = { godTask = false; tick++ })
+    if (layouts) LayoutDialog(onDismiss = { layouts = false })
     if (permissions) PermissionsDialog(onSync = onSync, onOpenBackup = onOpenBackup, onDismiss = { permissions = false; tick++ })
 }
 

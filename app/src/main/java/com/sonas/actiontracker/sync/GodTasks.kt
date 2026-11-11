@@ -112,7 +112,8 @@ object GodTasks {
             }
             val late = dao.openGodBefore(t)
             late.forEach { dao.update(it.copy(dueDate = t)) }
-            val picks = plan(today, choice(context), dao.godCountOn(t), history, familyNext, Random.Default, count)
+            val favorites = dao.favorites(SOURCE_GOD).mapNotNull { keyOf(it) }.toSet()
+            val picks = plan(today, choice(context), dao.godCountOn(t), history, familyNext, Random.Default, count, favorites)
             picks.forEach { dao.insert(it.toItem(t)) }
             late.size to picks
         }
@@ -186,7 +187,7 @@ object GodTasks {
      */
     fun plan(
         day: LocalDate, choice: String, already: Int, history: Map<String, Long>, familyNext: Int, random: Random,
-        count: Int = countFor(day)
+        count: Int = countFor(day), favorites: Set<String> = emptySet()
     ): List<Pick> {
         val n = count.coerceAtMost(MAX_COUNT) - already
         if (n <= 0 || choice == OFF) return emptyList()
@@ -196,17 +197,33 @@ object GodTasks {
         val used = history.toMutableMap()
         var family = familyNext
         return themes.map { theme ->
-            val index = pickIndex(theme, used, day.toEpochDay(), random)
+            val index = pickIndex(theme, used, day.toEpochDay(), random, favorites)
             used[key(theme, index)] = day.toEpochDay()
             val person = if (theme == GodTheme.FAMILY) FAMILY[Math.floorMod(family++, FAMILY.size)] else "Me"
             Pick(theme, index, theme.tasks[index].replace("{name}", person), person)
         }
     }
 
-    /** A random task not picked in the last [NO_REPEAT_DAYS] days, or else the one picked longest ago. */
-    fun pickIndex(theme: GodTheme, used: Map<String, Long>, today: Long, random: Random): Int {
+    /** A favourite God task may come back after this many days instead of [NO_REPEAT_DAYS]. */
+    const val FAVORITE_REPEAT_DAYS = 14L
+
+    /** The library key of the task a God task row was made from, or null if its title was edited. */
+    fun keyOf(item: Item): String? {
+        val theme = themeOf(item) ?: return null
+        val index = theme.tasks.indices.firstOrNull { theme.tasks[it].replace("{name}", item.person) == item.title } ?: return null
+        return key(theme, index)
+    }
+
+    /**
+     * A random task not picked in the last [NO_REPEAT_DAYS] days ([FAVORITE_REPEAT_DAYS] for the
+     * keys in [favorites]), or else the one picked longest ago.
+     */
+    fun pickIndex(theme: GodTheme, used: Map<String, Long>, today: Long, random: Random, favorites: Set<String> = emptySet()): Int {
         val all = theme.tasks.indices
-        val fresh = all.filter { i -> used[key(theme, i)]?.let { today - it >= NO_REPEAT_DAYS } ?: true }
+        val fresh = all.filter { i ->
+            val wait = if (key(theme, i) in favorites) FAVORITE_REPEAT_DAYS else NO_REPEAT_DAYS
+            used[key(theme, i)]?.let { today - it >= wait } ?: true
+        }
         return if (fresh.isNotEmpty()) fresh.random(random) else all.minBy { used[key(theme, it)] ?: Long.MIN_VALUE }
     }
 

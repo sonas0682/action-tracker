@@ -22,6 +22,7 @@ import com.sonas.actiontracker.data.DB_VERSION
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
 import com.sonas.actiontracker.data.Processed
+import com.sonas.actiontracker.data.Reflection
 import com.sonas.actiontracker.data.Recurrence
 import com.sonas.actiontracker.data.Series
 import com.sonas.actiontracker.data.STATUS_DONE
@@ -197,14 +198,17 @@ object Backup {
                         i.endDate?.let { put("endDate", it) }
                         i.endCount?.let { put("endCount", it) }
                         i.sourceRef?.let { put("sourceRef", it) }
+                        if (i.favorite) put("favorite", true)
                     }
             )
         }
         val processed = JSONArray()
         dao.allProcessed().forEach { processed.put(JSONObject().put("key", it.sourceKey).put("at", it.at)) }
+        val reflections = JSONArray()
+        dao.allReflections().forEach { reflections.put(JSONObject().put("day", it.day).put("text", it.text).put("at", it.at)) }
         return JSONObject()
             .put("version", FORMAT).put("schema", DB_VERSION).put("exportedAt", System.currentTimeMillis())
-            .put("items", items).put("processed", processed)
+            .put("items", items).put("processed", processed).put("reflections", reflections)
     }
 
     /**
@@ -227,11 +231,22 @@ object Backup {
                 Processed(key, o.optLong("at", System.currentTimeMillis()))
             }
         }
+        // Backups from before v8 have no reflections; a row without a day or text is skipped.
+        val reflections = (root.optJSONArray("reflections") ?: JSONArray()).let { arr ->
+            (0 until arr.length()).mapNotNull { n ->
+                val o = arr.optJSONObject(n) ?: return@mapNotNull null
+                val text = o.optString("text").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                if (!o.has("day")) return@mapNotNull null
+                Reflection(o.optLong("day"), text, o.optLong("at", System.currentTimeMillis()))
+            }
+        }
         val db = Db.get(context)
         val dao = db.dao()
         db.withTransaction {
             dao.deleteAllItems()
             dao.deleteAllProcessed()
+            dao.deleteAllReflections()
+            reflections.forEach { dao.saveReflection(it) }
             // Rows with their own id first, so a new id handed out never takes one of theirs.
             items.sortedBy { it.id == 0L }.forEach { dao.insert(it) }
             processed.forEach { dao.markProcessed(it) }
@@ -261,7 +276,8 @@ object Backup {
             seriesStart = o.optLongOrNull("seriesStart"),
             endDate = o.optLongOrNull("endDate"),
             endCount = o.optLongOrNull("endCount")?.toInt(),
-            sourceRef = o.optString("sourceRef").ifEmpty { null }
+            sourceRef = o.optString("sourceRef").ifEmpty { null },
+            favorite = o.optBoolean("favorite", false)
         )
     }
 

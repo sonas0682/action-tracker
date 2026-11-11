@@ -53,8 +53,9 @@ object ThoughtTasks {
         val prefs = prefs(context)
         if (prefs.getLong("last_day", Long.MIN_VALUE) == t) return@withLock false
 
-        val index = Thoughts.next(prefs.getInt("last_index", -1))
         val db = Db.get(context)
+        val favorites = runCatching { Thoughts.indexesOf(db.dao().favorites(SOURCE_THOUGHT).map { it.title }) }.getOrDefault(emptySet())
+        val index = Thoughts.next(prefs.getInt("last_index", -1), favorites = favorites)
         val changed = db.withTransaction {
             val dao = db.dao()
             val dropped = dao.deleteOpenThoughtsBefore(t)

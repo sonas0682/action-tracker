@@ -50,6 +50,15 @@ App
   Privacy & data (Fingerprint lock switch, Google Drive backup, Permissions & features), version
   last. Every row has an icon on the same tinted circle and a one-line state summary under its
   title. New once-set options go into a Settings section, not the ⋮ menu.
+- Layouts (added 2026-11-11 at Sona's request): Settings → Look → Layout picks how the Now / Near /
+  Next page body is drawn: Classic (default, everything above), Ledger, Quest Path, Day Dial,
+  Journal Page or Metro Line (`ui/Layouts.kt`). Header, dock, edit sheet, Suggested, Calendar,
+  Stats and widget are shared. Every layout keeps tap = edit, long-press = Delete / Another God
+  task, tap the mark = tick (haptic + bounce), and folds far repeats under Upcoming. Each day page
+  has its own layout (the picker's All pages sets all three). The group-by chip shows in Classic
+  and Ledger. The Thought of the day keeps its quote card (`ThoughtRow`) outside Journal Page, and
+  a finished page ends with `finale`. Layout colours (paper, quest board) live in `Fresh` with both shades. Scores come
+  from stored actions only; no layout adds a table or column.
 - Calendar's day list is one list (no time-of-day sub-headers), each row with its time-of-day icon
   on the right.
 - Suggested is a swipe deck of cards: right adds, left skips, up edits first; buttons below do the

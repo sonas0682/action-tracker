@@ -32,7 +32,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | --- | --- |
 | `App.kt` | Application; saves the last crash trace to `files/last_crash.txt` |
 | `MainActivity.kt` | Fingerprint lock (pref `lock_enabled`, off by default), Google auth hand-off, crash-trace screen (`showLastCrash`) |
-| `data/Data.kt` | Room `Db` (SQLCipher), `Item`/`Processed` entities, `ItemDao`, `DB_VERSION`, all migrations, `DbKey` (Keystore-wrapped passphrase), `TimeOfDay` |
+| `data/Data.kt` | Room `Db` (SQLCipher), `Item`/`Processed`/`Reflection` (evening reflection, one per day) entities, `ItemDao`, `DB_VERSION`, all migrations, `DbKey` (Keystore-wrapped passphrase), `TimeOfDay` |
 | `data/Recurrence.kt` | `Recurrence` rules, `Series` (repeating rows kept 3 months ahead; scoped save / delete / undo) and `Actions` (complete / reopen) |
 | `sync/Google.kt`, `Extractor.kt`, `Sync.kt` | Gmail + Calendar REST (each source switchable; declined scopes switch it off), rule-based extraction, `SyncWorker` (~2 h) and notifications |
 | `sync/Features.kt`, `ui/Permissions.kt` | ⋮ → Settings → Permissions & features: On / Basic / Off per permission, Google source and on-device model, with Fix buttons |
@@ -47,13 +47,14 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
 | `ui/Screens.kt`, `MainVM.kt`, `ContextPages.kt` | Main screen (⋮ → Contexts list and per-context pages, page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Now / Near / Next (today / tomorrow / later) / Suggested / Calendar / Stats pages in a swipeable pager, top-aligned lists, Suggested swipe deck), edit sheet, long-press delete |
 | `ui/Settings.kt`, `SettingsText.kt` | ⋮ → Settings page (Daily / Look / Privacy & data sections) and its row summaries; the ⋮ menu itself is `MoreMenu` in `Screens.kt` (Sync now, Contexts, Settings) |
-| `ui/Insights.kt` | Calendar and Stats pages (`InsightsPage`) |
+| `ui/Layouts.kt`, `LayoutLogic.kt` | ⋮ → Settings → Look → Layout: `AppLayout` (Classic, Ledger, Quest Path, Day Dial, Journal Page, Metro Line), one per day page in `LayoutPref` ("ui" prefs); `LayoutPage` draws the Now / Near / Next body for the non-Classic ones; sections, Ledger grouping and filter, XP, levels, streak, dial clock and finale lines are pure functions in `LayoutLogic.kt`; Journal uses `res/font/caveat.ttf` (OFL, `licenses/`) |
+| `ui/Insights.kt` | Calendar (with each day's evening reflection) and Stats pages (`InsightsPage`; layout card and Milestones from `Layouts.kt`) |
 | `ui/Voice.kt`, `Photo.kt`, `BackupUi.kt`, `Theme.kt` | Listen sheet, photo button + draft note, backup dialog, "Fresh" palette (light + dark, `ThemePref` Light / Dark / System in prefs) + `glass()` |
 | `widget/DueWidget.kt` | Glance Today/Tomorrow widget |
 
 ## Hard rules
 
-- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 7). Any change to an
+- **Database**: schema is at `DB_VERSION` in `data/Data.kt` (currently 8). Any change to an
   entity needs a version bump, a `Migration` registered in `addMigrations`, and matching
   `Backup` export/import fields. An older build over a newer database crashes at launch, so
   never hand out an APK built from a branch with a lower `DB_VERSION` than `main`. Details in

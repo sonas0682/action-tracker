@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.sonas.actiontracker.data.Actions
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.data.Reflection
 import com.sonas.actiontracker.data.Series
 import com.sonas.actiontracker.data.SeriesScope
 import com.sonas.actiontracker.data.Snapshot
@@ -38,6 +39,26 @@ class MainVM(app: Application) : AndroidViewModel(app) {
 
     val suggested = dao.suggested().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val actions = dao.actions().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** Evening reflections, one line per day. */
+    val reflections = dao.reflections().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val uiPrefs = app.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
+    /** ⋮ → Settings → Evening reflection: on shows "What went well today?" on Now from 7 PM until it is written. */
+    var reflectionOn by mutableStateOf(uiPrefs.getBoolean("reflection", true))
+        private set
+
+    fun setReflection(on: Boolean) {
+        uiPrefs.edit().putBoolean("reflection", on).apply()
+        reflectionOn = on
+    }
+
+    /** Saves the line about [day]; an empty line removes it. */
+    fun saveReflection(day: Long, text: String) = write {
+        if (text.isBlank()) dao.deleteReflection(day) else dao.saveReflection(Reflection(day, text.trim()))
+    }
+
+    /** Long-press → Favorite on a Thought of the day or God task: favourites come round again sooner. */
+    fun setFavorite(item: Item, on: Boolean) = write { dao.setFavorite(item.id, on) }
 
     /** ⋮ → Settings → Thought of the day: off hides thought rows from the lists. */
     var showThought by mutableStateOf(ThoughtTasks.enabled(app))

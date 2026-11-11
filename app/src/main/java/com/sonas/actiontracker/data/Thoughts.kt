@@ -50,8 +50,19 @@ object Thoughts {
         Thought("Follow effective action with quiet reflection; it brings even more effective action.", "Peter Drucker")
     )
 
-    /** Index of a random thought other than [last], so two days in a row never repeat. */
-    fun next(last: Int, random: Random = Random.Default): Int {
+    /** About one day in this many brings back a favourite instead of a random thought. */
+    const val FAVORITE_EVERY = 4
+
+    /** The indexes of the thoughts whose text is in [texts] (the favourites, read from their rows). */
+    fun indexesOf(texts: Collection<String>): Set<Int> = all.indices.filter { all[it].text in texts }.toSet()
+
+    /**
+     * Index of a random thought other than [last], so two days in a row never repeat. With
+     * [favorites], about one day in [FAVORITE_EVERY] picks from them instead.
+     */
+    fun next(last: Int, random: Random = Random.Default, favorites: Set<Int> = emptySet()): Int {
+        val liked = favorites.filter { it in all.indices && it != last }
+        if (liked.isNotEmpty() && random.nextInt(FAVORITE_EVERY) == 0) return liked.random(random)
         if (last !in all.indices) return random.nextInt(all.size)
         val i = random.nextInt(all.size - 1)
         return if (i >= last) i + 1 else i

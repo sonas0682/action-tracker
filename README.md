@@ -82,7 +82,7 @@ Nano only runs while the app is open, and only on phones that support it.
   top to bottom (Morning, Afternoon, Evening, Night), starting under the top bar.
 - **Menu and Settings**: the ⋮ menu is short: Sync now, Contexts, then Settings. Settings is one
   page in three sections, each row showing its current state: **Daily** (Reminders, God task,
-  Thought of the day), **Look** (Theme: System, Light or Dark in one tap) and **Privacy & data**
+  Thought of the day), **Look** (Theme: System, Light or Dark in one tap; Layout) and **Privacy & data**
   (Fingerprint lock, Google Drive backup, Permissions & features), with the app version at the end.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
@@ -128,8 +128,44 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
 - **Theme** (⋮ → Settings → Theme): System default (follows Android's dark mode), Light or Dark. The widget
   follows the same choice.
+- **Layouts** (⋮ → Settings → Layout): six ways to draw the Now, Near and Next pages, each with a
+  small preview in the picker. Choose one for all pages, or a different one for Now, Near and
+  Next (say Quest Path on Now and Ledger on Next). In every layout: tap a row to edit, long-press
+  to delete, tap its mark to tick it (with a short buzz and a bounce). The Thought of the day
+  keeps its quote card, and a finished page closes with a line of its own ("Books closed",
+  "Quest complete", "End of the line"). The dock, Suggested, Calendar, Stats and the widget stay the same.
+  - **Classic** (default): cards, grouped the way you choose.
+  - **Ledger**: a dense table with Open / Late / Done / % closed on top; tap a number to show
+    only those rows. The group-by chip regroups the table by time, date, person or context.
+  - **Quest Path**: tasks are steps on a winding trail. Every finished task is 20 XP and a God
+    task 50, with levels, a day streak and today's XP worked out from the tasks you have already
+    finished (unticking a task returns its XP). Reaching a level is announced on the board.
+  - **Day Dial**: a ring with a Morning, Afternoon, Evening and Night arc that fills as tasks
+    close; tap an arc to list that part of the day. A dot marks the current time on Now, and
+    late tasks from other parts of the day are always listed first.
+  - **Journal Page**: a ruled, handwritten page that opens with the Thought of the day; bullets
+    are open, crosses are done. (The handwriting is the bundled Caveat font, SIL Open Font License.)
+  - **Metro Line**: the day as a train line. Times of day are stations, tasks are stops, each
+    context has its own line colour and badge, and "You are here" marks the current time on Now.
+- **Move to tomorrow**: long-press a task due today or late and pick Move to tomorrow (with Undo).
+  It moves only that task; nothing rolls over on its own.
+- **Evening reflection** (⋮ → Settings → Evening reflection, on by default): from 7 PM, Now shows a
+  slim "What went well today?" bar until you write a line. Each day's line shows under that day on
+  Calendar, where you can add or change it for any past day. Reflections are part of the Drive backup.
+- **Favorites**: long-press a Thought of the day or a God task and pick Favorite (★). A favorite
+  thought comes back about one day in four; a favorite God task may return after 14 days instead
+  of 60. Past thoughts and God tasks are listed under ⋮ → Contexts → Thought of the day / God task.
+- **Milestones** (Stats page): First Step, Week of Fire, Month of Fire, Centurion, Lamp Keeper,
+  Deep Reader and On-Time Week, worked out from the tasks you have finished. Stats also opens
+  with a card in the Now page's layout (a month statement in Ledger, level and XP in Quest Path,
+  rings closed in Day Dial, evenings written in Journal Page, stops made in Metro Line).
+- **Reminders in your layout's words**: with a layout other than Classic on Now, the digest and
+  pop-ups read like it ("Today's quest: 5 steps, 1 late", "3 stops left on the evening line").
+- **Sign-in heads-up**: about a day before the 7-day Google sign-in (Testing mode) is due to end,
+  a notification says sync will ask you to sign in again. It is an estimate from your last sign-in.
 - **Home-screen widget**: Now (today) and Near (tomorrow) tabs; tick tasks off from the home screen. Task
-  titles are visible there even when the app lock is on.
+  titles are visible there even when the app lock is on. Its title line follows the Now page's layout
+  (Ledger counts, Quest level and streak, a small Day Dial ring, Journal tally, Metro's next stop).
 - **Calendar and stats**: the last two tabs show a month view and how many tasks you finished.
 - **Long-press to delete** (sideways swipes change pages), with Undo.
 - **Fingerprint lock** (optional) and **screenshot blocking**.

@@ -83,6 +83,9 @@ internal fun monthOf(index: Int): YearMonth = YearMonth.of(index / 12, index % 1
  */
 @Composable
 fun InsightsPage(
+    layout: AppLayout,
+    reflections: Map<Long, String>,
+    onReflect: (Long) -> Unit,
     stats: Boolean,
     actions: List<Item>,
     month: YearMonth,
@@ -97,7 +100,8 @@ fun InsightsPage(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
-            if (stats) StatsTab(actions, month) else CalendarTab(actions, month, selected, onSelect, onToggle, onEdit)
+            if (stats) StatsTab(actions, month, layout, reflections.keys)
+            else CalendarTab(actions, month, selected, onSelect, onToggle, onEdit, reflections[selected]) { onReflect(selected) }
             Spacer(Modifier.height(12.dp))
         }
     }
@@ -112,7 +116,9 @@ private fun CalendarTab(
     selected: Long,
     onSelect: (Long) -> Unit,
     onToggle: (Item) -> Unit,
-    onEdit: (Item) -> Unit
+    onEdit: (Item) -> Unit,
+    reflection: String?,
+    onReflect: () -> Unit
 ) {
     val today = LocalDate.now().toEpochDay()
     val byDay = remember(actions) { actions.groupBy { it.dueDate } }
@@ -179,6 +185,7 @@ private fun CalendarTab(
         color = Fresh.Indigo,
         modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 6.dp)
     )
+    ReflectionLine(selected, reflection, onReflect)
     if (dayItems.isEmpty()) {
         Text(
             "Nothing due this day.",
@@ -365,9 +372,11 @@ private fun cheer(s: Stats): String {
 }
 
 @Composable
-private fun StatsTab(actions: List<Item>, month: YearMonth) {
+private fun StatsTab(actions: List<Item>, month: YearMonth, layout: AppLayout, reflectionDays: Set<Long>) {
     val s = remember(actions, month) { stats(actions, month) }
     val rate = if (s.monthTotal == 0) 0f else s.monthDone.toFloat() / s.monthTotal
+
+    LayoutStatsCard(layout, actions, month, reflectionDays)
 
     Row(Modifier.fillMaxWidth().glass(CARD).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         ProgressRing(rate, Modifier.size(84.dp))
@@ -409,6 +418,9 @@ private fun StatsTab(actions: List<Item>, month: YearMonth) {
 
     SectionLabel("Backlog by age")
     BacklogAging(s.aging)
+
+    SectionLabel("Milestones")
+    MilestonesCard(actions)
 }
 
 /** One line per time of day: icon, label, done/total and a thin bar of the done share. */

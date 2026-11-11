@@ -10,6 +10,9 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.sonas.actiontracker.data.Db
 import com.sonas.actiontracker.data.Item
+import com.sonas.actiontracker.ui.DayPage
+import com.sonas.actiontracker.ui.LayoutPref
+import com.sonas.actiontracker.ui.digestHeading
 import com.sonas.actiontracker.widget.DueWidget
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -76,7 +79,8 @@ object Reminders {
     private fun post(context: Context, due: List<Item>, today: LocalDate) {
         ensureChannel(context)
         val overdue = due.count { it.dueDate < today.toEpochDay() }
-        val title = summary(due.size - overdue, overdue)
+        // The digest speaks in the Now page's layout: "Today's quest: 5 steps, 1 late".
+        val title = digestHeading(LayoutPref.read(context, DayPage.TODAY), due.size, overdue) ?: summary(due.size - overdue, overdue)
         TaskNotifications.post(context, TaskNotifications.digestTag(), CHANNEL, title, due, today, urgent = false)
     }
 
@@ -107,6 +111,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         }
         runCatching { Reminders.checkAndNotify(applicationContext) }
         runCatching { SlotReminders.catchUp(applicationContext) }
+        runCatching { GoogleAuth.warnIfExpiring(applicationContext) }
         return Result.success()
     }
 }
