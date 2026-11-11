@@ -128,18 +128,25 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
 - **Theme** (⋮ → Settings → Theme): System default (follows Android's dark mode), Light or Dark. The widget
   follows the same choice.
-- **Layouts** (⋮ → Settings → Layout): six ways to draw the Now, Near and Next pages. Tap a row to
-  edit, long-press to delete and tap its mark to tick it in every one; the dock, Suggested,
-  Calendar, Stats and the widget stay the same. Only Classic has the group-by chip.
+- **Layouts** (⋮ → Settings → Layout): six ways to draw the Now, Near and Next pages, each with a
+  small preview in the picker. Choose one for all pages, or a different one for Now, Near and
+  Next (say Quest Path on Now and Ledger on Next). In every layout: tap a row to edit, long-press
+  to delete, tap its mark to tick it (with a short buzz and a bounce). The Thought of the day
+  keeps its quote card, and a finished page closes with a line of its own ("Books closed",
+  "Quest complete", "End of the line"). The dock, Suggested, Calendar, Stats and the widget stay the same.
   - **Classic** (default): cards, grouped the way you choose.
-  - **Ledger**: a dense table with Open / Late / Done / % closed on top and person and context in columns.
+  - **Ledger**: a dense table with Open / Late / Done / % closed on top; tap a number to show
+    only those rows. The group-by chip regroups the table by time, date, person or context.
   - **Quest Path**: tasks are steps on a winding trail. Every finished task is 20 XP and a God
-    task 50, with levels and a day streak worked out from the tasks you have already finished.
+    task 50, with levels, a day streak and today's XP worked out from the tasks you have already
+    finished (unticking a task returns its XP). Reaching a level is announced on the board.
   - **Day Dial**: a ring with a Morning, Afternoon, Evening and Night arc that fills as tasks
-    close; tap an arc to list that part of the day.
-  - **Journal Page**: a ruled page that opens with the Thought of the day; bullets are open, crosses are done.
-  - **Metro Line**: the day as a train line. Times of day are stations, tasks are stops with a
-    context badge, and "You are here" marks the current time on Now.
+    close; tap an arc to list that part of the day. A dot marks the current time on Now, and
+    late tasks from other parts of the day are always listed first.
+  - **Journal Page**: a ruled, handwritten page that opens with the Thought of the day; bullets
+    are open, crosses are done. (The handwriting is the bundled Caveat font, SIL Open Font License.)
+  - **Metro Line**: the day as a train line. Times of day are stations, tasks are stops, each
+    context has its own line colour and badge, and "You are here" marks the current time on Now.
 - **Home-screen widget**: Now (today) and Near (tomorrow) tabs; tick tasks off from the home screen. Task
   titles are visible there even when the app lock is on.
 - **Calendar and stats**: the last two tabs show a month view and how many tasks you finished.

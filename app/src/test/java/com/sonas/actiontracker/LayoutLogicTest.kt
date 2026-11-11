@@ -7,6 +7,14 @@ import com.sonas.actiontracker.data.TimeOfDay
 import com.sonas.actiontracker.sync.SOURCE_GOD
 import com.sonas.actiontracker.ui.AppLayout
 import com.sonas.actiontracker.ui.DayPage
+import com.sonas.actiontracker.ui.Group
+import com.sonas.actiontracker.ui.LedgerFilter
+import com.sonas.actiontracker.ui.allDone
+import com.sonas.actiontracker.ui.dialAngle
+import com.sonas.actiontracker.ui.finaleLine
+import com.sonas.actiontracker.ui.layoutSummary
+import com.sonas.actiontracker.ui.ledgerFilter
+import com.sonas.actiontracker.ui.ledgerSections
 import com.sonas.actiontracker.ui.Quest
 import com.sonas.actiontracker.ui.contextCode
 import com.sonas.actiontracker.ui.lateText
@@ -15,6 +23,7 @@ import com.sonas.actiontracker.ui.personCode
 import com.sonas.actiontracker.ui.slotAt
 import com.sonas.actiontracker.ui.splitUpcoming
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneOffset
@@ -25,9 +34,9 @@ class LayoutLogicTest {
 
     private fun item(
         title: String, due: Long = today, time: TimeOfDay = TimeOfDay.EVENING, done: Boolean = false,
-        source: String = "MANUAL", seriesId: Long? = null, completedAt: Long? = null
+        source: String = "MANUAL", seriesId: Long? = null, completedAt: Long? = null, person: String = "Me", context: String = "Work"
     ) = Item(
-        id = nextId++, title = title, dueDate = due, status = if (done) STATUS_DONE else STATUS_OPEN,
+        id = nextId++, title = title, person = person, context = context, dueDate = due, status = if (done) STATUS_DONE else STATUS_OPEN,
         source = source, timeOfDay = time.name, seriesId = seriesId, completedAt = completedAt
     )
 
@@ -121,5 +130,60 @@ class LayoutLogicTest {
             item("c", done = true)
         )
         assertEquals(setOf(today), Quest.doneDays(items, ZoneOffset.UTC))
+    }
+
+    @Test fun ledgerRegroupsByPersonContextAndDate() {
+        val items = listOf(
+            item("b", person = "Zed", context = "Home", due = today + 3),
+            item("a", person = "Me", context = "Work", due = today + 2),
+            item("c", person = "Me", context = "Home", due = today + 2, done = true)
+        )
+        assertEquals(listOf("Me", "Zed"), ledgerSections(items, Group.PERSON, DayPage.LATER, today) { "" }.map { it.label })
+        val byContext = ledgerSections(items, Group.CONTEXT, DayPage.LATER, today) { "" }
+        assertEquals(listOf("Home", "Work"), byContext.map { it.label })
+        assertEquals(listOf("b", "c"), byContext[0].items.map { it.title })
+        assertEquals(listOf("day 2", "day 3"), ledgerSections(items, Group.DATE, DayPage.LATER, today) { "day ${it - today}" }.map { it.label })
+        assertEquals(listOf("Evening"), ledgerSections(items, Group.TIME, DayPage.LATER, today) { "" }.map { it.label })
+    }
+
+    @Test fun ledgerFilterNarrowsTheTable() {
+        val items = listOf(item("late", due = today - 1), item("open"), item("done", done = true))
+        assertEquals(3, items.ledgerFilter(null, today).size)
+        assertEquals(listOf("late", "open"), items.ledgerFilter(LedgerFilter.OPEN, today).map { it.title })
+        assertEquals(listOf("late"), items.ledgerFilter(LedgerFilter.LATE, today).map { it.title })
+        assertEquals(listOf("done"), items.ledgerFilter(LedgerFilter.DONE, today).map { it.title })
+    }
+
+    @Test fun dialClockGoesRoundOnceADay() {
+        assertEquals(0f, dialAngle(3, 0), 0.01f)
+        assertEquals(0f, dialAngle(6, 0), 0.01f)
+        assertEquals(45f, dialAngle(9, 0), 0.01f)
+        assertEquals(90f, dialAngle(12, 0), 0.01f)
+        assertEquals(180f, dialAngle(17, 0), 0.01f)
+        assertEquals(270f, dialAngle(21, 0), 0.01f)
+        assertEquals(315f, dialAngle(22, 30), 0.01f)
+    }
+
+    @Test fun allDoneNeedsSomethingFinished() {
+        assertFalse(allDone(emptyList()))
+        assertFalse(allDone(listOf(item("a", done = true), item("b"))))
+        assertTrue(allDone(listOf(item("a", done = true))))
+        assertEquals(finaleLine(today), finaleLine(today))
+        assertTrue(finaleLine(-3).isNotEmpty())
+    }
+
+    @Test fun layoutSummaryNamesPagesOnlyWhenTheyDiffer() {
+        assertEquals("Ledger on every page", layoutSummary(AppLayout.LEDGER, AppLayout.LEDGER, AppLayout.LEDGER))
+        assertEquals("Now Quest Path · Near Classic · Next Ledger", layoutSummary(AppLayout.QUEST, AppLayout.CLASSIC, AppLayout.LEDGER))
+    }
+
+    @Test fun xpTodayCountsOnlyTodaysFinishes() {
+        val dayMs = 86_400_000L
+        val items = listOf(
+            item("a", done = true, completedAt = today * dayMs + 5),
+            item("g", done = true, source = SOURCE_GOD, completedAt = today * dayMs + 9),
+            item("old", done = true, completedAt = (today - 1) * dayMs)
+        )
+        assertEquals(Quest.TASK_XP + Quest.GOD_XP, Quest.xpOn(items, today, ZoneOffset.UTC))
     }
 }

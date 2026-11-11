@@ -15,7 +15,7 @@ import java.time.ZoneId
 enum class AppLayout(val label: String, val blurb: String) {
     CLASSIC("Classic", "Cards, grouped the way you choose"),
     LEDGER("Ledger", "A dense table with the day's numbers on top"),
-    QUEST("Quest Path", "Tasks are steps on a path; finishing earns XP"),
+    QUEST("Quest Path", "Steps on a path; finishing earns XP, unticking returns it"),
     DIAL("Day Dial", "A ring that fills from Morning to Night"),
     JOURNAL("Journal Page", "A ruled page that opens with the day's thought"),
     METRO("Metro Line", "The day as a train line; tasks are stops");
@@ -59,6 +59,82 @@ fun layoutSections(items: List<Item>, page: DayPage, today: Long, dateLabel: (Lo
     return out
 }
 
+/**
+ * Ledger's blocks, regrouped by the dock's group-by chip: Time and Date as on the other layouts,
+ * Person and Context alphabetically. Late gets its own block only when grouped by time.
+ */
+fun ledgerSections(items: List<Item>, group: Group, page: DayPage, today: Long, dateLabel: (Long) -> String): List<LaySection> {
+    val byTime = compareBy<Item>({ it.status == STATUS_DONE }, { it.dueDate }, { TimeOfDay.of(it.timeOfDay).ordinal })
+    return when (group) {
+        Group.TIME -> layoutSections(items, if (page == DayPage.LATER) DayPage.TOMORROW else page, today, dateLabel)
+        Group.DATE -> items.groupBy { it.dueDate }.toSortedMap().map { (day, list) ->
+            LaySection("d-$day", dateLabel(day), null, day < today && list.any { it.isLate(today) }, list.sortedWith(byTime))
+        }
+        Group.PERSON -> items.groupBy { it.person }.toSortedMap().map { (person, list) ->
+            LaySection("p-$person", person, null, false, list.sortedWith(byTime))
+        }
+        Group.CONTEXT -> items.groupBy { it.context }.toSortedMap().map { (context, list) ->
+            LaySection("c-$context", context, null, false, list.sortedWith(byTime))
+        }
+    }
+}
+
+/** What Ledger's top strip can narrow the table to. */
+enum class LedgerFilter { OPEN, LATE, DONE }
+
+fun List<Item>.ledgerFilter(filter: LedgerFilter?, today: Long): List<Item> = when (filter) {
+    null -> this
+    LedgerFilter.OPEN -> filter { it.status == STATUS_OPEN }
+    LedgerFilter.LATE -> filter { it.isLate(today) }
+    LedgerFilter.DONE -> filter { it.status == STATUS_DONE }
+}
+
+/**
+ * Where the clock sits on the Day Dial, in degrees clockwise from the top. Each time of day is a
+ * quarter turn: Morning 6-12, Afternoon 12-5, Evening 5-9, Night 9-midnight; before 6 AM is the start.
+ */
+fun dialAngle(hour: Int, minute: Int): Float {
+    val t = hour + minute / 60f
+    return when {
+        t < 6f -> 0f
+        t < 12f -> (t - 6f) / 6f * 90f
+        t < 17f -> 90f + (t - 12f) / 5f * 90f
+        t < 21f -> 180f + (t - 17f) / 4f * 90f
+        else -> 270f + (t - 21f) / 3f * 90f
+    }
+}
+
+/** A page with something on it and nothing left open. */
+fun allDone(items: List<Item>): Boolean = items.isNotEmpty() && items.all { it.status == STATUS_DONE }
+
+private val FINALE_LINES = listOf(
+    "A finished day is a quiet kind of wealth.",
+    "What you kept today, tomorrow can build on.",
+    "Small promises kept are how trust in yourself grows.",
+    "Rest is part of the work. You have earned it.",
+    "The list is empty; let the mind be too.",
+    "Done with care is done for good.",
+    "Today asked, and you answered."
+)
+
+/** The closing thought under a finished page; changes with the day, the same all day. */
+fun finaleLine(today: Long): String = FINALE_LINES[Math.floorMod(today, FINALE_LINES.size.toLong()).toInt()]
+
+/** What each layout calls a finished page. */
+fun finaleTitle(layout: AppLayout): String = when (layout) {
+    AppLayout.CLASSIC -> "All done"
+    AppLayout.LEDGER -> "Books closed"
+    AppLayout.QUEST -> "Quest complete"
+    AppLayout.DIAL -> "Ring closed"
+    AppLayout.JOURNAL -> "Page finished"
+    AppLayout.METRO -> "End of the line"
+}
+
+/** The Layout row's summary in Settings: one name when every page matches, else page by page. */
+fun layoutSummary(now: AppLayout, near: AppLayout, next: AppLayout): String =
+    if (now == near && near == next) "${now.label} on every page"
+    else "Now ${now.label} · Near ${near.label} · Next ${next.label}"
+
 /** The time of day a clock hour (0-23) falls in, matching the 12 / 4 / 7 / 10 PM reminders. */
 fun slotAt(hour: Int): TimeOfDay = when {
     hour < 12 -> TimeOfDay.MORNING
@@ -93,6 +169,11 @@ object Quest {
     fun xpFor(item: Item): Int = if (item.source == SOURCE_GOD) GOD_XP else TASK_XP
 
     fun totalXp(items: List<Item>): Int = items.filter { it.status == STATUS_DONE }.sumOf { xpFor(it) }
+
+    /** XP earned by actions finished on [day]. */
+    fun xpOn(items: List<Item>, day: Long, zone: ZoneId = ZoneId.systemDefault()): Int = items.filter { item ->
+        item.status == STATUS_DONE && item.completedAt?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate().toEpochDay() } == day
+    }.sumOf { xpFor(it) }
 
     /** XP needed to stand at [level]: 0, 100, 300, 600, 1000 … */
     fun xpToReach(level: Int): Int = 50 * level * (level - 1)

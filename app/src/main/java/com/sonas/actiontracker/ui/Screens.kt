@@ -529,8 +529,9 @@ fun AppScreen(
                                     onEdit = { editing = it }
                                 )
                             } else if (index < TAB_SUGGESTED) {
-                                if (LayoutPref.layout != AppLayout.CLASSIC) LayoutPage(
-                                    LayoutPref.layout, DayPage.entries[index], dayPages[index], actions, showUpcoming,
+                                val layout = LayoutPref.of(DayPage.entries[index])
+                                if (layout != AppLayout.CLASSIC) LayoutPage(
+                                    layout, DayPage.entries[index], groupOf(index), dayPages[index], actions, showUpcoming,
                                     onToggleUpcoming = { showUpcoming = !showUpcoming },
                                     act = RowActions(toggle = { vm.toggleDone(it) }, edit = { editing = it }, delete = deleteWithUndo, replace = replaceGod)
                                 ) else DayPageList(
@@ -579,8 +580,9 @@ fun AppScreen(
                     },
                     contextual = {
                         if (tab < TAB_SUGGESTED) {
-                            // Only Classic regroups; the other layouts have one fixed reading order.
-                            if (LayoutPref.layout == AppLayout.CLASSIC) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
+                            // Classic and Ledger regroup; the other layouts have one fixed reading order.
+                            val layout = LayoutPref.of(DayPage.entries[tab])
+                            if (layout == AppLayout.CLASSIC || layout == AppLayout.LEDGER) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
                         }
                         else if (tab == TAB_SUGGESTED && suggested.isNotEmpty()) {
                             DockChip("All ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
@@ -1653,7 +1655,7 @@ private fun DayPageList(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ThoughtRow(item: Item, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ThoughtRow(item: Item, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val isDone = item.status == STATUS_DONE
     val shape = RoundedCornerShape(18.dp)
     val wash = Brush.linearGradient(

@@ -156,7 +156,7 @@ internal fun SettingsScreen(
                     SettingRow(
                         icon = { IconBadge(Fresh.Indigo) { Icon(Icons.Rounded.Menu, null, tint = Fresh.Indigo, modifier = Modifier.size(20.dp)) } },
                         title = "Layout",
-                        summary = LayoutPref.layout.let { "${it.label} · ${it.blurb}" },
+                        summary = layoutSummary(LayoutPref.of(DayPage.TODAY), LayoutPref.of(DayPage.TOMORROW), LayoutPref.of(DayPage.LATER)),
                         onClick = { layouts = true }
                     )
                 }
