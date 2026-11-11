@@ -100,6 +100,19 @@ object Fresh {
     val GoldWash get() = pick(0xFFFFF4DB, 0xFF33280F)
     val GoldRim get() = pick(0xFFF0C35A, 0xFF8F6B1E)
 
+    /** Journal Page layout: ruled paper, its red margin and fountain-pen ink. */
+    val Paper get() = pick(0xFFFBF7EC, 0xFF1C1A14)
+    val PaperRule get() = pick(0xFFD9D2BC, 0xFF3A3528)
+    val PaperMargin get() = pick(0xFFC9543F, 0xFF9E4A3A)
+    val PaperInk get() = pick(0xFF2B4A8C, 0xFF9DB8F0)
+    /** Quest Path layout: a night-sky board in both themes, with a gold and mint trail on it. */
+    val QuestNight get() = pick(0xFF131838, 0xFF0B0E22)
+    val QuestTrack get() = pick(0xFF2E3670, 0xFF262D5C)
+    val QuestGold get() = pick(0xFFFFC84A, 0xFFFFC84A)
+    val QuestMint get() = pick(0xFF3FD0B6, 0xFF3FD0B6)
+    val QuestText get() = pick(0xFFFFFFFF, 0xFFF2F3FF)
+    val QuestDim get() = pick(0xFFB9C0E6, 0xFFB0B7DE)
+
     val accent: Brush get() = Brush.linearGradient(listOf(Indigo, Sky, Teal))
     val accentHorizontal: Brush get() = Brush.horizontalGradient(listOf(Indigo, Sky, Teal))
 }

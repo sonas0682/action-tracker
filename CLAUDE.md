@@ -47,6 +47,7 @@ gradle :app:bundleRelease --no-daemon       # Play bundle -> app/build/outputs/b
 | `sync/Backup.kt` | Encrypted Drive appDataFolder backup (PBKDF2 + AES-256-GCM), JSON export/import |
 | `ui/Screens.kt`, `MainVM.kt`, `ContextPages.kt` | Main screen (⋮ → Contexts list and per-context pages, page-header top bar, two-row bottom dock: group-by + type bar + ⋮, then tabs; Now / Near / Next (today / tomorrow / later) / Suggested / Calendar / Stats pages in a swipeable pager, top-aligned lists, Suggested swipe deck), edit sheet, long-press delete |
 | `ui/Settings.kt`, `SettingsText.kt` | ⋮ → Settings page (Daily / Look / Privacy & data sections) and its row summaries; the ⋮ menu itself is `MoreMenu` in `Screens.kt` (Sync now, Contexts, Settings) |
+| `ui/Layouts.kt`, `LayoutLogic.kt` | ⋮ → Settings → Look → Layout: `AppLayout` (Classic, Ledger, Quest Path, Day Dial, Journal Page, Metro Line) in `LayoutPref` ("ui" prefs); `LayoutPage` draws the Now / Near / Next body for the non-Classic ones; sections, XP, levels and streak are pure functions in `LayoutLogic.kt` |
 | `ui/Insights.kt` | Calendar and Stats pages (`InsightsPage`) |
 | `ui/Voice.kt`, `Photo.kt`, `BackupUi.kt`, `Theme.kt` | Listen sheet, photo button + draft note, backup dialog, "Fresh" palette (light + dark, `ThemePref` Light / Dark / System in prefs) + `glass()` |
 | `widget/DueWidget.kt` | Glance Today/Tomorrow widget |

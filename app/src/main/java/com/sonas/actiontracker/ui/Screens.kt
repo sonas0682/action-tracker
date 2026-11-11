@@ -529,7 +529,11 @@ fun AppScreen(
                                     onEdit = { editing = it }
                                 )
                             } else if (index < TAB_SUGGESTED) {
-                                DayPageList(
+                                if (LayoutPref.layout != AppLayout.CLASSIC) LayoutPage(
+                                    LayoutPref.layout, DayPage.entries[index], dayPages[index], actions, showUpcoming,
+                                    onToggleUpcoming = { showUpcoming = !showUpcoming },
+                                    act = RowActions(toggle = { vm.toggleDone(it) }, edit = { editing = it }, delete = deleteWithUndo, replace = replaceGod)
+                                ) else DayPageList(
                                     DayPage.entries[index], dayPages[index], groupOf(index), showUpcoming,
                                     onToggleUpcoming = { showUpcoming = !showUpcoming },
                                     vm = vm, onEdit = { editing = it }, onDelete = deleteWithUndo, onReplace = replaceGod,
@@ -574,7 +578,10 @@ fun AppScreen(
                         showUndo("Added \"${draft.title}\"", null)
                     },
                     contextual = {
-                        if (tab < TAB_SUGGESTED) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
+                        if (tab < TAB_SUGGESTED) {
+                            // Only Classic regroups; the other layouts have one fixed reading order.
+                            if (LayoutPref.layout == AppLayout.CLASSIC) GroupMenu(groupOf(tab)) { setGroup(tab, it) }
+                        }
                         else if (tab == TAB_SUGGESTED && suggested.isNotEmpty()) {
                             DockChip("All ${suggested.size}", Icons.Rounded.Check, Fresh.Green) { vm.confirmAll(suggested) }
                         }

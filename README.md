@@ -82,7 +82,7 @@ Nano only runs while the app is open, and only on phones that support it.
   top to bottom (Morning, Afternoon, Evening, Night), starting under the top bar.
 - **Menu and Settings**: the ⋮ menu is short: Sync now, Contexts, then Settings. Settings is one
   page in three sections, each row showing its current state: **Daily** (Reminders, God task,
-  Thought of the day), **Look** (Theme: System, Light or Dark in one tap) and **Privacy & data**
+  Thought of the day), **Look** (Theme: System, Light or Dark in one tap; Layout) and **Privacy & data**
   (Fingerprint lock, Google Drive backup, Permissions & features), with the app version at the end.
 - **Type a task**: type a sentence in the bottom bar, for example "ask Vibu about the science fair
   Friday evening". Chips show the person, due date, time of day and context as you type (same rules
@@ -128,6 +128,18 @@ Nano only runs while the app is open, and only on phones that support it.
 - **Share to task**: share text from any app (a school message, a web page) to Action Tracker.
 - **Theme** (⋮ → Settings → Theme): System default (follows Android's dark mode), Light or Dark. The widget
   follows the same choice.
+- **Layouts** (⋮ → Settings → Layout): six ways to draw the Now, Near and Next pages. Tap a row to
+  edit, long-press to delete and tap its mark to tick it in every one; the dock, Suggested,
+  Calendar, Stats and the widget stay the same. Only Classic has the group-by chip.
+  - **Classic** (default): cards, grouped the way you choose.
+  - **Ledger**: a dense table with Open / Late / Done / % closed on top and person and context in columns.
+  - **Quest Path**: tasks are steps on a winding trail. Every finished task is 20 XP and a God
+    task 50, with levels and a day streak worked out from the tasks you have already finished.
+  - **Day Dial**: a ring with a Morning, Afternoon, Evening and Night arc that fills as tasks
+    close; tap an arc to list that part of the day.
+  - **Journal Page**: a ruled page that opens with the Thought of the day; bullets are open, crosses are done.
+  - **Metro Line**: the day as a train line. Times of day are stations, tasks are stops with a
+    context badge, and "You are here" marks the current time on Now.
 - **Home-screen widget**: Now (today) and Near (tomorrow) tabs; tick tasks off from the home screen. Task
   titles are visible there even when the app lock is on.
 - **Calendar and stats**: the last two tabs show a month view and how many tasks you finished.
